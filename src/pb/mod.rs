@@ -37,3 +37,9 @@ impl From<&str> for Value {
         }
     }
 }
+
+impl From<(String, Value)> for Kvpair {
+    fn from(t: (String, Value)) -> Self {
+        Self::new(t.0, t.1)
+    }
+}

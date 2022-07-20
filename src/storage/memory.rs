@@ -54,11 +54,7 @@ impl Storage for MemTable {
     fn get_iter(&self, table: &str) -> Result<Box<dyn Iterator<Item = Kvpair>>, KvError> {
         let table = self.get_or_create_table(table);
         Ok(Box::new(
-            table
-                .to_owned()
-                .into_iter()
-                .map(|v| Kvpair::new(v.0, v.1))
-                .into_iter(),
+            table.to_owned().into_iter().map(|v| v.into()).into_iter(),
         ))
     }
 }
