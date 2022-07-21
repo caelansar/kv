@@ -11,6 +11,7 @@ prost = "0.10.4"
 tracing = "0.1"
 thiserror = "1.0"
 dashmap = "5.3.4"
+http = "0.2"
 
 [dev-dependencies]
 anyhow = "1.0"
