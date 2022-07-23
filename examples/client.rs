@@ -22,5 +22,17 @@ async fn main() -> Result<()> {
         info!("Got response {:?}", data);
     }
 
+    let cmd = CommandRequest::new_hget("table1", "hello");
+    client.send(cmd).await?;
+    if let Some(Ok(data)) = client.next().await {
+        info!("Got response {:?}", data);
+    }
+
+    let cmd = CommandRequest::new_hget("table1", "hello1");
+    client.send(cmd).await?;
+    if let Some(Ok(data)) = client.next().await {
+        info!("Got response {:?}", data);
+    }
+
     Ok(())
 }
