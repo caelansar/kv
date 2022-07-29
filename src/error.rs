@@ -1,3 +1,5 @@
+use std::io;
+
 use crate::Value;
 use thiserror::Error;
 
@@ -16,6 +18,16 @@ pub enum KvError {
     EncodeError(#[from] prost::EncodeError),
     #[error("Failed to decode protobuf message")]
     DecodeError(#[from] prost::DecodeError),
+    #[error("Frame error: {0}")]
+    FrameError(String),
+    #[error("IO error: {0}")]
+    IOError(String),
     #[error("Internal error: {0}")]
     Internal(String),
+}
+
+impl From<io::Error> for KvError {
+    fn from(i: io::Error) -> Self {
+        Self::IOError(i.to_string())
+    }
 }
