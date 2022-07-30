@@ -16,11 +16,6 @@ pub trait FrameCodec
 where
     Self: Message + Sized + Default,
 {
-    fn encode_frame(&self, buf: &mut BytesMut) -> Result<(), KvError>;
-    fn decode_frame(buf: &mut BytesMut) -> Result<Self, KvError>;
-}
-
-impl FrameCodec for CommandRequest {
     fn encode_frame(&self, buf: &mut BytesMut) -> Result<(), KvError> {
         let size = self.encoded_len();
 
@@ -53,7 +48,6 @@ impl FrameCodec for CommandRequest {
             Ok(())
         }
     }
-
     fn decode_frame(buf: &mut BytesMut) -> Result<Self, KvError> {
         let header = buf.get_u32() as usize;
         let len = header & !COMPRESSION_BIT;
@@ -74,19 +68,16 @@ impl FrameCodec for CommandRequest {
         }
     }
 }
-impl FrameCodec for CommandResponse {
-    fn encode_frame(&self, buf: &mut BytesMut) -> Result<(), KvError> {
-        todo!()
-    }
 
-    fn decode_frame(buf: &mut BytesMut) -> Result<Self, KvError> {
-        todo!()
-    }
-}
+impl FrameCodec for CommandRequest {}
+impl FrameCodec for CommandResponse {}
 
 #[cfg(test)]
 mod tests {
+    use crate::Value;
+
     use super::*;
+    use bytes::Bytes;
     use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
     #[test]
@@ -105,6 +96,32 @@ mod tests {
 
         // make sure buf is exhausted
         assert_eq!(0, buf.len());
+    }
+
+    #[test]
+    fn command_response_encode_decode_should_work() {
+        let mut buf = BytesMut::new();
+        let values: Vec<Value> = vec![1.into(), "hello".into(), "world".into()];
+        let res: CommandResponse = values.into();
+
+        res.encode_frame(&mut buf).unwrap();
+        assert_eq!(is_compressed(&buf), false);
+
+        let res1 = CommandResponse::decode_frame(&mut buf).unwrap();
+        assert_eq!(res, res1);
+    }
+
+    #[test]
+    fn command_response_compressed_encode_decode_should_work() {
+        let mut buf = BytesMut::new();
+        let value: Value = Bytes::from(vec![0u8; COMPRESSION_LIMIT + 1]).into();
+        let res: CommandResponse = value.into();
+
+        res.encode_frame(&mut buf).unwrap();
+        assert_eq!(is_compressed(&buf), true);
+
+        let res1 = CommandResponse::decode_frame(&mut buf).unwrap();
+        assert_eq!(res, res1);
     }
 
     fn is_compressed(data: &[u8]) -> bool {

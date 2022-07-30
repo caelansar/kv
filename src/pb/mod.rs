@@ -2,6 +2,7 @@ pub mod abi;
 
 use crate::{command_request::RequestData, *};
 use abi::*;
+use bytes::Bytes;
 use http::StatusCode;
 
 impl CommandRequest {
@@ -56,6 +57,14 @@ impl From<i64> for Value {
     }
 }
 
+impl From<Bytes> for Value {
+    fn from(buf: Bytes) -> Self {
+        Self {
+            value: Some(value::Value::Binary(buf)),
+        }
+    }
+}
+
 impl From<(String, Value)> for Kvpair {
     fn from(t: (String, Value)) -> Self {
         Self::new(t.0, t.1)
@@ -67,6 +76,16 @@ impl From<Value> for CommandResponse {
         Self {
             status: StatusCode::OK.as_u16() as u32,
             values: vec![v],
+            ..Default::default()
+        }
+    }
+}
+
+impl From<Vec<Value>> for CommandResponse {
+    fn from(v: Vec<Value>) -> Self {
+        Self {
+            status: StatusCode::OK.as_u16() as u32,
+            values: v,
             ..Default::default()
         }
     }
