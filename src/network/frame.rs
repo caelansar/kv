@@ -65,9 +65,11 @@ impl FrameCodec for CommandRequest {
             decoder.read_to_end(&mut buf1)?;
 
             let msg = Self::decode(&buf1[..buf1.len()])?;
+            buf.advance(len);
             Ok(msg)
         } else {
             let msg = Self::decode(&buf[..len])?;
+            buf.advance(len);
             Ok(msg)
         }
     }
@@ -100,6 +102,9 @@ mod tests {
 
         let cmd1 = CommandRequest::decode_frame(&mut buf).unwrap();
         assert_eq!(cmd, cmd1);
+
+        // make sure buf is exhausted
+        assert_eq!(0, buf.len());
     }
 
     fn is_compressed(data: &[u8]) -> bool {
