@@ -31,10 +31,16 @@ pub struct ServiceInner<Store> {
     store: Store,
 }
 
+impl<Store> ServiceInner<Store> {
+    pub fn new(store: Store) -> Self {
+        Self { store }
+    }
+}
+
 impl<Store: Storage> Service<Store> {
     pub fn new(store: Store) -> Self {
         Self {
-            inner: Arc::new(ServiceInner { store }),
+            inner: Arc::new(ServiceInner::new(store)),
         }
     }
 

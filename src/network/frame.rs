@@ -2,6 +2,7 @@ use bytes::{Buf, BufMut, BytesMut};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use prost::Message;
 use std::io::{Read, Write};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing::debug;
 
 use crate::{CommandRequest, CommandResponse, KvError};
@@ -27,6 +28,7 @@ where
         buf.put_u32(size as u32);
 
         if size > COMPRESSION_LIMIT {
+            debug!("encode compression");
             let mut buf1 = Vec::with_capacity(size);
             self.encode(&mut buf1)?;
 
@@ -54,6 +56,7 @@ where
         let compressed = header & COMPRESSION_BIT == COMPRESSION_BIT;
 
         if compressed {
+            debug!("decode compression");
             let mut decoder = GzDecoder::new(&buf[..len]);
             let mut buf1 = Vec::with_capacity(len * 2);
             decoder.read_to_end(&mut buf1)?;
@@ -72,6 +75,21 @@ where
 impl FrameCodec for CommandRequest {}
 impl FrameCodec for CommandResponse {}
 
+pub async fn read_frame<S>(stream: &mut S, buf: &mut BytesMut) -> Result<(), KvError>
+where
+    S: AsyncRead + Unpin + Send,
+{
+    let header = stream.read_u32().await? as usize;
+    let len = header & !COMPRESSION_BIT;
+
+    buf.reserve(LENGTH + len);
+    buf.put_u32(header as _);
+
+    unsafe { buf.advance_mut(len) };
+    stream.read_exact(&mut buf[LENGTH..]).await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Value;
@@ -79,6 +97,24 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+    struct DummyStream {
+        buf: BytesMut,
+    }
+
+    impl AsyncRead for DummyStream {
+        fn poll_read(
+            self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            let len = buf.capacity();
+            let data = self.get_mut().buf.split_to(len);
+            buf.put_slice(&data);
+
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
 
     #[test]
     fn command_request_encode_decode_should_work() {
@@ -122,6 +158,20 @@ mod tests {
 
         let res1 = CommandResponse::decode_frame(&mut buf).unwrap();
         assert_eq!(res, res1);
+    }
+
+    #[tokio::test]
+    async fn read_frame_should_work() {
+        let mut buf = BytesMut::new();
+        let cmd = CommandRequest::new_hget("t1", "k1");
+        cmd.encode_frame(&mut buf).unwrap();
+
+        let mut stream = DummyStream { buf };
+        let mut data = BytesMut::new();
+
+        read_frame(&mut stream, &mut data).await.unwrap();
+        let cmd_c = CommandRequest::decode_frame(&mut data).unwrap();
+        assert_eq!(cmd, cmd_c);
     }
 
     fn is_compressed(data: &[u8]) -> bool {
