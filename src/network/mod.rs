@@ -1,4 +1,5 @@
 mod frame;
+mod noise;
 
 use self::frame::read_frame;
 use crate::{CommandRequest, CommandResponse, KvError, Service};
