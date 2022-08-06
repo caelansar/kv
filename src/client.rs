@@ -13,15 +13,18 @@ async fn main() -> Result<()> {
 
     let cmd = CommandRequest::new_hset("table1", "hello", "world".into());
     info!("client send cmd {:?}", cmd);
-    client.execute(cmd).await?;
+    let resp = client.execute(cmd).await?;
+    info!("client get resp {:?}", resp);
 
     let cmd = CommandRequest::new_hget("table1", "hello");
     info!("client send cmd {:?}", cmd);
-    client.execute(cmd).await?;
+    let resp = client.execute(cmd).await?;
+    info!("client get resp {:?}", resp);
 
     let cmd = CommandRequest::new_hget("table1", "hello1");
     info!("client send cmd {:?}", cmd);
-    client.execute(cmd).await?;
+    let resp = client.execute(cmd).await?;
+    info!("client get resp {:?}", resp);
 
     Ok(())
 }

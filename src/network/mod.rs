@@ -1,14 +1,17 @@
 mod frame;
 mod noise;
+mod stream;
 
-use self::frame::read_frame;
+use self::{frame::read_frame, stream::FrameStream};
 use crate::{CommandRequest, CommandResponse, KvError, Service};
 use bytes::BytesMut;
 pub use frame::FrameCodec;
+use futures::{SinkExt, StreamExt};
 use std::marker;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tracing::info;
 
+#[deprecated]
 pub struct FrameIO<S, F, T> {
     inner: S,
     _f: marker::PhantomData<F>,
@@ -45,11 +48,11 @@ where
 
 pub struct ServerStream<S> {
     service: Service,
-    io: FrameIO<S, CommandRequest, CommandResponse>,
+    inner: FrameStream<S, CommandRequest, CommandResponse>,
 }
 
 pub struct ClientStream<S> {
-    io: FrameIO<S, CommandResponse, CommandRequest>,
+    inner: FrameStream<S, CommandResponse, CommandRequest>,
 }
 
 impl<S> ServerStream<S>
@@ -58,26 +61,18 @@ where
 {
     pub fn new(stream: S, service: Service) -> Self {
         Self {
-            io: FrameIO::new(stream),
+            inner: FrameStream::new(stream),
             service,
         }
     }
 
     pub async fn process(mut self) -> Result<(), KvError> {
-        while let Ok(cmd) = self.recv().await {
+        while let Some(Ok(cmd)) = self.inner.next().await {
             info!("process command: {:?}", cmd);
             let res = self.service.execute(cmd);
-            self.send(res).await?;
+            self.inner.send(res).await?;
         }
         Ok(())
-    }
-
-    async fn send(&mut self, msg: CommandResponse) -> Result<(), KvError> {
-        self.io.send(msg).await
-    }
-
-    async fn recv(&mut self) -> Result<CommandRequest, KvError> {
-        self.io.recv().await
     }
 }
 
@@ -87,21 +82,16 @@ where
 {
     pub fn new(stream: S) -> Self {
         Self {
-            io: FrameIO::new(stream),
+            inner: FrameStream::new(stream),
         }
     }
 
     pub async fn execute(&mut self, cmd: CommandRequest) -> Result<CommandResponse, KvError> {
-        self.send(cmd).await?;
-        Ok(self.recv().await?)
-    }
-
-    async fn send(&mut self, msg: CommandRequest) -> Result<(), KvError> {
-        self.io.send(msg).await
-    }
-
-    async fn recv(&mut self) -> Result<CommandResponse, KvError> {
-        self.io.recv().await
+        self.inner.send(cmd).await?;
+        match self.inner.next().await {
+            Some(v) => v,
+            None => Err(KvError::Internal("no response".into())),
+        }
     }
 }
 
@@ -169,5 +159,54 @@ mod tests {
         });
 
         Ok(addr)
+    }
+}
+
+#[cfg(test)]
+pub mod utils {
+    use bytes::{BufMut, BytesMut};
+    use tokio::io::{AsyncRead, AsyncWrite};
+
+    pub struct DummyStream {
+        pub buf: BytesMut,
+    }
+
+    impl AsyncRead for DummyStream {
+        fn poll_read(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            let len = buf.capacity();
+            let data = self.get_mut().buf.split_to(len);
+            buf.put_slice(&data);
+
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    impl AsyncWrite for DummyStream {
+        fn poll_write(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<Result<usize, std::io::Error>> {
+            self.get_mut().buf.put_slice(buf);
+            std::task::Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
     }
 }

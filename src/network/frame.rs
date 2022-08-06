@@ -92,29 +92,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::Value;
+    use crate::{utils::DummyStream, Value};
 
     use super::*;
     use bytes::Bytes;
     use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
-
-    struct DummyStream {
-        buf: BytesMut,
-    }
-
-    impl AsyncRead for DummyStream {
-        fn poll_read(
-            self: std::pin::Pin<&mut Self>,
-            cx: &mut std::task::Context<'_>,
-            buf: &mut tokio::io::ReadBuf<'_>,
-        ) -> std::task::Poll<std::io::Result<()>> {
-            let len = buf.capacity();
-            let data = self.get_mut().buf.split_to(len);
-            buf.put_slice(&data);
-
-            std::task::Poll::Ready(Ok(()))
-        }
-    }
 
     #[test]
     fn command_request_encode_decode_should_work() {
