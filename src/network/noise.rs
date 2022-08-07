@@ -12,11 +12,11 @@ pub struct NoiseClient<'a> {
 }
 
 impl<'a> NoiseServer<'a> {
-    fn new(secret: &'a [u8]) -> Self {
+    pub fn new(secret: &'a [u8]) -> Self {
         Self { secret }
     }
 
-    async fn accept<S>(&self, stream: S) -> Result<NoiseStream<S>, SnowstormError>
+    pub async fn accept<S>(&self, stream: S) -> Result<NoiseStream<S>, SnowstormError>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send,
     {
@@ -34,11 +34,11 @@ impl<'a> NoiseServer<'a> {
 }
 
 impl<'a> NoiseClient<'a> {
-    fn new(secret: &'a [u8]) -> Self {
+    pub fn new(secret: &'a [u8]) -> Self {
         Self { secret }
     }
 
-    async fn connect<S>(&self, stream: S) -> Result<NoiseStream<S>, SnowstormError>
+    pub async fn connect<S>(&self, stream: S) -> Result<NoiseStream<S>, SnowstormError>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send,
     {

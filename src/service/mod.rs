@@ -31,6 +31,14 @@ pub struct ServiceInner<Store> {
     store: Store,
 }
 
+impl<Store: Storage> From<ServiceInner<Store>> for Service<Store> {
+    fn from(inner: ServiceInner<Store>) -> Self {
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+}
+
 impl<Store> ServiceInner<Store> {
     pub fn new(store: Store) -> Self {
         Self { store }

@@ -1,6 +1,7 @@
 use anyhow::Result;
-use kv::{KvError, MemTable, ServerStream, Service};
+use kv::{KvError, MemTable, ServerStream, Service, YamuxCtrl};
 use tokio::net::TcpListener;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tracing::info;
 
 #[tokio::main]
@@ -13,11 +14,18 @@ async fn main() -> Result<(), KvError> {
     loop {
         let (stream, addr) = listener.accept().await?;
         info!("client {:?} connected", addr);
-        let server = ServerStream::new(stream, service.clone());
+
+        let svc = service.clone();
         tokio::spawn(async move {
-            server.process().await?;
-            info!("client {:?} disconnected", addr);
-            Result::<(), KvError>::Ok(())
+            YamuxCtrl::new_server(stream, None, move |stream| {
+                let svc1 = svc.clone();
+                async move {
+                    let server = ServerStream::new(stream.compat(), svc1.clone());
+                    server.process().await.unwrap();
+                    info!("client {:?} disconnected", addr);
+                    Ok(())
+                }
+            });
         });
     }
 }

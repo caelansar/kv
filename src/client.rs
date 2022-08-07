@@ -1,5 +1,5 @@
 use anyhow::Result;
-use kv::{ClientStream, CommandRequest};
+use kv::{ClientStream, CommandRequest, YamuxCtrl};
 use tokio::net::TcpStream;
 use tracing::info;
 
@@ -9,6 +9,8 @@ async fn main() -> Result<()> {
     let addr = "127.0.0.1:5000";
     let stream = TcpStream::connect(addr).await?;
 
+    let mut ctrl = YamuxCtrl::new_client(stream, None);
+    let stream = ctrl.open_stream().await?;
     let mut client = ClientStream::new(stream);
 
     let cmd = CommandRequest::new_hset("table1", "hello", "world".into());

@@ -1,12 +1,14 @@
 mod frame;
+mod multiplex;
 mod noise;
 mod stream;
 
 use self::{frame::read_frame, stream::FrameStream};
-use crate::{CommandRequest, CommandResponse, KvError, Service};
+use crate::{CommandRequest, CommandResponse, KvError, Service, Storage};
 use bytes::BytesMut;
 pub use frame::FrameCodec;
 use futures::{SinkExt, StreamExt};
+pub use multiplex::*;
 use std::marker;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tracing::info;
@@ -46,8 +48,8 @@ where
     }
 }
 
-pub struct ServerStream<S> {
-    service: Service,
+pub struct ServerStream<S, Store> {
+    service: Service<Store>,
     inner: FrameStream<S, CommandRequest, CommandResponse>,
 }
 
@@ -55,11 +57,12 @@ pub struct ClientStream<S> {
     inner: FrameStream<S, CommandResponse, CommandRequest>,
 }
 
-impl<S> ServerStream<S>
+impl<S, Store> ServerStream<S, Store>
 where
+    Store: Storage,
     S: AsyncRead + AsyncWrite + Unpin + Send,
 {
-    pub fn new(stream: S, service: Service) -> Self {
+    pub fn new(stream: S, service: Service<Store>) -> Self {
         Self {
             inner: FrameStream::new(stream),
             service,
