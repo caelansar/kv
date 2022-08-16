@@ -11,6 +11,7 @@ pub use frame::FrameCodec;
 use futures::{SinkExt, StreamExt};
 pub use multiplex::*;
 use std::marker;
+pub use tls::*;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tracing::info;
 
