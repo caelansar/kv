@@ -20,6 +20,8 @@ pub enum KvError {
     DecodeError(#[from] prost::DecodeError),
     #[error("Frame error: {0}")]
     FrameError(String),
+    #[error("Failed to parse certificate: {0}-{1}")]
+    CertifcateParseError(&'static str, &'static str),
     #[error("IO error: {0}")]
     IOError(String),
     #[error("Internal error: {0}")]

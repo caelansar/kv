@@ -2,6 +2,7 @@ mod frame;
 mod multiplex;
 mod noise;
 mod stream;
+mod tls;
 
 use self::{frame::read_frame, stream::FrameStream};
 use crate::{CommandRequest, CommandResponse, KvError, Service, Storage};
