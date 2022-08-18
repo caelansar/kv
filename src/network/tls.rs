@@ -1,11 +1,13 @@
 use std::io::{BufReader, Cursor};
 use std::sync::Arc;
 
-use rustls::server::{AllowAnyAuthenticatedClient, NoClientAuth};
-use rustls::{ServerName, DEFAULT_CIPHER_SUITES, DEFAULT_VERSIONS};
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio_rustls::rustls::{Certificate, ClientConfig, ServerConfig};
+use tokio_rustls::rustls::server::{AllowAnyAuthenticatedClient, NoClientAuth};
+use tokio_rustls::rustls::{
+    Certificate, ClientConfig, ServerConfig, ALL_CIPHER_SUITES, ALL_VERSIONS,
+};
 use tokio_rustls::rustls::{PrivateKey, RootCertStore};
+use tokio_rustls::rustls::{ServerName, DEFAULT_CIPHER_SUITES, DEFAULT_VERSIONS};
 use tokio_rustls::TlsConnector;
 use tokio_rustls::{
     client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor,
@@ -31,8 +33,8 @@ impl TlsServer {
         let certs = load_certs(cert)?;
         let key = load_key(key)?;
 
-        let suites = rustls::ALL_CIPHER_SUITES.to_vec();
-        let versions = rustls::ALL_VERSIONS.to_vec();
+        let suites = ALL_CIPHER_SUITES.to_vec();
+        let versions = ALL_VERSIONS.to_vec();
 
         let mut client_auth = NoClientAuth::new();
         if client_ca.is_some() {
@@ -44,7 +46,7 @@ impl TlsServer {
             client_auth = AllowAnyAuthenticatedClient::new(client_auth_roots);
         }
 
-        let mut config = rustls::ServerConfig::builder()
+        let mut config = ServerConfig::builder()
             .with_cipher_suites(&suites)
             .with_safe_default_kx_groups()
             .with_protocol_versions(&versions)
@@ -92,7 +94,7 @@ impl TlsClient {
             .with_cipher_suites(&suites)
             .with_safe_default_kx_groups()
             .with_protocol_versions(&versions)
-            .expect("inconsistent cipher-suite/versions selected")
+            .map_err(|_| KvError::CertifcateParseError("client", "protocol_version"))?
             .with_root_certificates(root_store);
 
         if let Some((cert, key)) = identity {
@@ -100,7 +102,7 @@ impl TlsClient {
             let key = load_key(key)?;
             let config = builder
                 .with_single_cert(certs, key)
-                .expect("invalid client auth certs/key");
+                .map_err(|_| KvError::CertifcateParseError("client", "cert"))?;
             Ok(Self {
                 config: Arc::new(config),
                 domain: Arc::new(domain.into()),
@@ -135,7 +137,7 @@ fn load_certs(cert: &str) -> Result<Vec<Certificate>, KvError> {
     Ok(rustls_pemfile::certs(&mut reader)
         .map_err(|_| KvError::CertifcateParseError("server", "cert"))?
         .into_iter()
-        .map(|v| rustls::Certificate(v))
+        .map(|v| Certificate(v))
         .collect())
 }
 
