@@ -23,6 +23,25 @@ impl CommandService for Hset {
     }
 }
 
+impl CommandService for Hdel {
+    fn execute(self, store: &impl Storage) -> CommandResponse {
+        match store.del(&self.table, &self.key) {
+            Ok(Some(v)) => v.into(),
+            Ok(None) => Value::default().into(),
+            Err(e) => e.into(),
+        }
+    }
+}
+
+impl CommandService for Hexist {
+    fn execute(self, store: &impl Storage) -> CommandResponse {
+        match store.contains(&self.table, &self.key) {
+            Ok(v) => Value::from(v).into(),
+            Err(e) => e.into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -46,5 +65,41 @@ mod tests {
         let cmd = CommandRequest::new_hget("score", "u1");
         let res = dispatch(cmd, &store);
         assert_res_ok(res, &[10.into()], &[]);
+    }
+
+    #[test]
+    fn hdel_should_work() {
+        let store = MemTable::new();
+        let cmd = CommandRequest::new_hset("score", "u1", 10.into());
+        dispatch(cmd, &store);
+
+        let cmd = CommandRequest::new_hget("score", "u1");
+        let res = dispatch(cmd, &store);
+        assert_res_ok(res, &[10.into()], &[]);
+
+        let cmd = CommandRequest::new_hdel("score", "u1");
+        dispatch(cmd, &store);
+
+        let cmd = CommandRequest::new_hget("score", "u1");
+        let res = dispatch(cmd, &store);
+        assert_res_error(res, 404, "");
+    }
+
+    #[test]
+    fn hexist_should_work() {
+        let store = MemTable::new();
+        let cmd = CommandRequest::new_hset("score", "u1", 10.into());
+        dispatch(cmd, &store);
+
+        let cmd = CommandRequest::new_hexist("score", "u1");
+        let res = dispatch(cmd, &store);
+        assert_res_ok(res, &[true.into()], &[]);
+
+        let cmd = CommandRequest::new_hdel("score", "u1");
+        dispatch(cmd, &store);
+
+        let cmd = CommandRequest::new_hexist("score", "u1");
+        let res = dispatch(cmd, &store);
+        assert_res_ok(res, &[false.into()], &[]);
     }
 }
