@@ -39,6 +39,50 @@ impl CommandRequest {
             })),
         }
     }
+
+    pub fn new_hmget(table: impl Into<String>, keys: Vec<String>) -> Self {
+        Self {
+            request_data: Some(RequestData::Hmget(Hmget {
+                table: table.into(),
+                keys,
+            })),
+        }
+    }
+
+    pub fn new_hgetall(table: impl Into<String>) -> Self {
+        Self {
+            request_data: Some(RequestData::Hgetall(Hgetall {
+                table: table.into(),
+            })),
+        }
+    }
+
+    pub fn new_hmset(table: impl Into<String>, pairs: Vec<Kvpair>) -> Self {
+        Self {
+            request_data: Some(RequestData::Hmset(Hmset {
+                table: table.into(),
+                pairs,
+            })),
+        }
+    }
+
+    pub fn new_hmdel(table: impl Into<String>, keys: Vec<String>) -> Self {
+        Self {
+            request_data: Some(RequestData::Hmdel(Hmdel {
+                table: table.into(),
+                keys,
+            })),
+        }
+    }
+
+    pub fn new_hmexist(table: impl Into<String>, keys: Vec<String>) -> Self {
+        Self {
+            request_data: Some(RequestData::Hmexist(Hmexist {
+                table: table.into(),
+                keys,
+            })),
+        }
+    }
 }
 
 impl Kvpair {
@@ -90,6 +134,14 @@ impl From<bool> for Value {
     }
 }
 
+impl From<f64> for Value {
+    fn from(f: f64) -> Self {
+        Self {
+            value: Some(value::Value::Float(f)),
+        }
+    }
+}
+
 impl From<(String, Value)> for Kvpair {
     fn from(t: (String, Value)) -> Self {
         Self::new(t.0, t.1)
@@ -116,6 +168,16 @@ impl From<Vec<Value>> for CommandResponse {
     }
 }
 
+impl From<Vec<Kvpair>> for CommandResponse {
+    fn from(v: Vec<Kvpair>) -> Self {
+        Self {
+            status: StatusCode::OK.as_u16() as u32,
+            pairs: v,
+            ..Default::default()
+        }
+    }
+}
+
 impl From<KvError> for CommandResponse {
     fn from(e: KvError) -> Self {
         let mut result = Self {
@@ -129,5 +191,11 @@ impl From<KvError> for CommandResponse {
             _ => {}
         }
         result
+    }
+}
+
+impl From<KvError> for Value {
+    fn from(_: KvError) -> Self {
+        Self::default()
     }
 }
