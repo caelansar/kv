@@ -6,6 +6,13 @@ use bytes::Bytes;
 use http::StatusCode;
 
 impl CommandRequest {
+    pub fn dispatch(self, store: &impl Storage) -> CommandResponse {
+        match self.request_data {
+            Some(request_data) => request_data.execute(store),
+            None => KvError::InvalidCommand("Request has no data".into()).into(),
+        }
+    }
+
     pub fn new_hget(table: impl Into<String>, key: impl Into<String>) -> Self {
         Self {
             request_data: Some(RequestData::Hget(Hget {
@@ -14,6 +21,7 @@ impl CommandRequest {
             })),
         }
     }
+
     pub fn new_hset(table: impl Into<String>, key: impl Into<String>, value: Value) -> Self {
         Self {
             request_data: Some(RequestData::Hset(Hset {
@@ -22,6 +30,7 @@ impl CommandRequest {
             })),
         }
     }
+
     pub fn new_hdel(table: impl Into<String>, key: impl Into<String>) -> Self {
         Self {
             request_data: Some(RequestData::Hdel(Hdel {
