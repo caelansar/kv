@@ -8,6 +8,7 @@ use crate::{CommandRequest, CommandResponse, MemTable, Storage};
 use crate::{Kvpair, Value};
 
 mod command_service;
+mod topic;
 
 pub trait CommandService {
     fn execute(self, store: &impl Storage) -> CommandResponse;

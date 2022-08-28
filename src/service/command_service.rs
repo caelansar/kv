@@ -22,6 +22,7 @@ impl CommandService for RequestData {
             RequestData::Hmset(param) => param.execute(store),
             RequestData::Hgetall(param) => param.execute(store),
             RequestData::Hmexist(param) => param.execute(store),
+            _ => todo!(),
         }
     }
 }

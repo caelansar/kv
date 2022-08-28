@@ -177,6 +177,42 @@ impl From<Vec<Value>> for CommandResponse {
     }
 }
 
+impl TryFrom<Value> for i64 {
+    type Error = KvError;
+
+    fn try_from(v: Value) -> Result<Self, Self::Error> {
+        match v.value {
+            Some(value::Value::Integer(i)) => Ok(i),
+            _ => Err(KvError::ConvertError(v, "Integer")),
+        }
+    }
+}
+
+impl TryFrom<&Value> for i64 {
+    type Error = KvError;
+
+    fn try_from(v: &Value) -> Result<Self, Self::Error> {
+        match v.value {
+            Some(value::Value::Integer(i)) => Ok(i),
+            _ => Err(KvError::ConvertError(v.to_owned(), "Integer")),
+        }
+    }
+}
+
+impl TryFrom<&CommandResponse> for i64 {
+    type Error = KvError;
+
+    fn try_from(value: &CommandResponse) -> Result<Self, Self::Error> {
+        if value.status != StatusCode::OK.as_u16() as u32 {
+            return Err(KvError::Internal("CommandResponse".into()));
+        }
+        match value.values.get(0) {
+            Some(v) => v.try_into(),
+            None => Err(KvError::Internal("CommandResponse".into())),
+        }
+    }
+}
+
 impl From<Vec<Kvpair>> for CommandResponse {
     fn from(v: Vec<Kvpair>) -> Self {
         Self {
