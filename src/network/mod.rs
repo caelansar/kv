@@ -77,6 +77,7 @@ where
             let res = self.service.execute(cmd);
             self.inner.send(res).await?;
         }
+        info!("process ok, client disconnect");
         Ok(())
     }
 }

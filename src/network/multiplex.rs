@@ -1,4 +1,4 @@
-use futures::{future, Future, TryStreamExt};
+use futures::{future, AsyncRead as AR, AsyncWrite as AW, Future, TryStreamExt};
 use std::marker::{self, PhantomData};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
@@ -45,7 +45,7 @@ where
 
         let ctrl = conn.control();
 
-        tokio::spawn(yamux::into_stream(conn).try_for_each_concurrent(None, f));
+        tokio::spawn(into_stream(conn).try_for_each_concurrent(None, f));
 
         Self {
             ctrl,
@@ -57,6 +57,24 @@ where
         let stream = self.ctrl.open_stream().await?;
         Ok(stream.compat())
     }
+}
+
+type YamulResult<T> = std::result::Result<T, yamux::ConnectionError>;
+
+/// Convert a Yamux connection into a futures::Stream
+fn into_stream<T>(
+    c: yamux::Connection<T>,
+) -> impl futures::stream::Stream<Item = YamulResult<yamux::Stream>>
+where
+    T: AR + AW + Unpin,
+{
+    futures::stream::unfold(c, |mut c| async {
+        match c.next_stream().await {
+            Ok(None) => None,
+            Ok(Some(stream)) => Some((Ok(stream), c)),
+            Err(_) => None,
+        }
+    })
 }
 
 #[cfg(test)]
