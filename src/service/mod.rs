@@ -49,8 +49,7 @@ impl<T> HookMut<T> for Vec<fn(&mut T)> {
 
 pub struct ServiceInner<Store> {
     store: Store,
-    on_received: Vec<fn(&CommandRequest)>,
-    before_send: Vec<fn(&mut CommandResponse)>,
+    process: Processor<CommandRequest, CommandResponse>,
 }
 
 impl<Store: Storage> From<ServiceInner<Store>> for Service<Store> {
@@ -65,16 +64,18 @@ impl<Store> ServiceInner<Store> {
     pub fn new(store: Store) -> Self {
         Self {
             store,
-            on_received: Vec::new(),
-            before_send: Vec::new(),
+            process: Processor::new(),
         }
     }
-    pub fn fn_received(mut self, f: fn(&CommandRequest)) -> Self {
-        self.on_received.push(f);
+    fn received_callback(mut self, c: impl Fn(&CommandRequest) + Send + Sync + 'static) -> Self {
+        self.process.set_callback(c);
         self
     }
-    pub fn fn_before_send(mut self, f: fn(&mut CommandResponse)) -> Self {
-        self.before_send.push(f);
+    fn before_send_callback(
+        mut self,
+        c: impl Fn(&mut CommandResponse) + Send + Sync + 'static,
+    ) -> Self {
+        self.process.set_mut_callback(c);
         self
     }
 }
@@ -88,12 +89,43 @@ impl<Store: Storage> Service<Store> {
 
     pub fn execute(&self, cmd: CommandRequest) -> CommandResponse {
         debug!("Got request: {:?}", cmd);
-        self.inner.on_received.hook(&cmd);
+        self.inner.process.process_events(&cmd);
+
         let mut res = cmd.dispatch(&self.inner.store);
-        self.inner.before_send.hook(&mut res);
+        self.inner.process.process_events_mut(&mut res);
         debug!("Executed response: {:?}", res);
 
         res
+    }
+}
+
+struct Processor<T, U> {
+    callbacks: Vec<Box<dyn Fn(&T) + Send + Sync>>,
+    mut_callbacks: Vec<Box<dyn Fn(&mut U) + Send + Sync>>,
+}
+
+impl<T, U> Processor<T, U> {
+    fn new() -> Self {
+        Self {
+            callbacks: Vec::new(),
+            mut_callbacks: Vec::new(),
+        }
+    }
+    fn set_callback(&mut self, c: impl Fn(&T) + Send + Sync + 'static) {
+        self.callbacks.push(Box::new(c));
+    }
+    fn set_mut_callback(&mut self, c: impl Fn(&mut U) + Send + Sync + 'static) {
+        self.mut_callbacks.push(Box::new(c));
+    }
+    fn process_events(&self, data: &T) {
+        for cb in self.callbacks.iter() {
+            cb(data)
+        }
+    }
+    fn process_events_mut(&self, data: &mut U) {
+        for cb in self.mut_callbacks.iter() {
+            cb(data)
+        }
     }
 }
 
@@ -126,10 +158,12 @@ mod test {
             info!("Before send {:?}", res);
             res.status = StatusCode::CREATED.as_u16() as _;
         }
+        let name = "cae";
         let service: Service = ServiceInner::new(MemTable::default())
-            .fn_received(|_: &CommandRequest| {})
-            .fn_received(on_received)
-            .fn_before_send(before_send)
+            .received_callback(|_: &CommandRequest| {})
+            .received_callback(on_received)
+            .before_send_callback(before_send)
+            .received_callback(move |_| info!("HOLA {}", name))
             .into();
         let res = service.execute(CommandRequest::new_hset("t1", "k1", "v1".into()));
         assert_eq!(res.status, StatusCode::CREATED.as_u16() as u32);
