@@ -1,12 +1,18 @@
 use anyhow::Result;
 use kv::{KvError, MemTable, ServerStream, Service, TlsServer, YamuxCtrl};
-use tokio::net::TcpListener;
+use std::future::Future;
+use tokio::{net::TcpListener, signal};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
-use tracing::info;
+use tracing::{error, info};
 
 #[tokio::main]
-async fn main() -> Result<(), KvError> {
+async fn main() {
     tracing_subscriber::fmt::init();
+
+    run(signal::ctrl_c()).await
+}
+
+async fn run_server() -> Result<(), KvError> {
     let service = Service::new(MemTable::new());
     let addr = "127.0.0.1:5000";
 
@@ -35,5 +41,18 @@ async fn main() -> Result<(), KvError> {
                 }
             });
         });
+    }
+}
+
+async fn run(shutdown: impl Future) {
+    tokio::select! {
+        res = run_server() => {
+            if let Err(err) = res {
+                error!(cause = %err, "failed to accept");
+            }
+        }
+        _ = shutdown => {
+            info!("shutting down");
+        }
     }
 }
