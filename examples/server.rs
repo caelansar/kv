@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_prost::AsyncProstStream;
 use futures::prelude::*;
@@ -21,8 +23,9 @@ async fn main() -> Result<()> {
                 AsyncProstStream::<_, CommandRequest, CommandResponse, _>::from(stream).for_async();
             while let Some(Ok(msg)) = stream.next().await {
                 info!("Got a new command: {:?}", msg);
-                let resp = service_c.execute(msg);
-                stream.send(resp).await.unwrap();
+                let mut resp = service_c.execute(msg);
+                let data = resp.next().await.unwrap();
+                stream.send(data.into()).await.unwrap();
             }
             info!("Client {:?} disconnected", addr);
         });

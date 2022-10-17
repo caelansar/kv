@@ -54,7 +54,7 @@ where
         Poll::Ready(Some(F::decode_frame(&mut self.rbuf)))
     }
 }
-impl<S, F, T> Sink<T> for FrameStream<S, F, T>
+impl<S, F, T> Sink<&T> for FrameStream<S, F, T>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send,
     T: Unpin + Send + FrameCodec,
@@ -69,7 +69,7 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn start_send(mut self: std::pin::Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
+    fn start_send(mut self: std::pin::Pin<&mut Self>, item: &T) -> Result<(), Self::Error> {
         item.encode_frame(&mut self.wbuf)?;
         Ok(())
     }
@@ -118,7 +118,7 @@ mod tests {
         let stream = DummyStream { buf };
         let mut stream = FrameStream::<_, CommandRequest, CommandRequest>::new(stream);
         let cmd = CommandRequest::new_hget("t1", "k1");
-        stream.send(cmd.clone()).await?;
+        stream.send(&cmd.clone()).await?;
 
         if let Some(Ok(s)) = stream.next().await {
             assert_eq!(cmd, s);

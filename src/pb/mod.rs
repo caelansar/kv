@@ -4,6 +4,7 @@ use crate::{command_request::RequestData, *};
 use abi::*;
 use bytes::Bytes;
 use http::StatusCode;
+use std::sync::Arc;
 
 impl CommandRequest {
     pub fn dispatch(self, store: &impl Storage) -> CommandResponse {
@@ -173,6 +174,17 @@ impl From<Vec<Value>> for CommandResponse {
             status: StatusCode::OK.as_u16() as u32,
             values: v,
             ..Default::default()
+        }
+    }
+}
+
+impl From<Arc<CommandResponse>> for CommandResponse {
+    fn from(a: Arc<CommandResponse>) -> Self {
+        Self {
+            status: a.status,
+            message: a.message.clone(),
+            values: a.values.clone(),
+            pairs: a.pairs.clone(),
         }
     }
 }

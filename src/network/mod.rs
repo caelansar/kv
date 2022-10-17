@@ -74,8 +74,10 @@ where
     pub async fn process(mut self) -> Result<(), KvError> {
         while let Some(Ok(cmd)) = self.inner.next().await {
             info!("process command: {:?}", cmd);
-            let res = self.service.execute(cmd);
-            self.inner.send(res).await?;
+            let mut res = self.service.execute(cmd);
+            while let Some(data) = res.next().await {
+                self.inner.send(&data).await?;
+            }
         }
         info!("process ok, client disconnect");
         Ok(())
@@ -93,7 +95,7 @@ where
     }
 
     pub async fn execute(&mut self, cmd: CommandRequest) -> Result<CommandResponse, KvError> {
-        self.inner.send(cmd).await?;
+        self.inner.send(&cmd).await?;
         match self.inner.next().await {
             Some(v) => v,
             None => Err(KvError::Internal("no response".into())),

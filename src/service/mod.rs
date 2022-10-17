@@ -1,7 +1,8 @@
 use crate::{CommandRequest, CommandResponse, MemTable, Storage};
 #[cfg(test)]
 use crate::{Kvpair, Value};
-use std::sync::Arc;
+use futures::{stream, Stream};
+use std::{pin::Pin, sync::Arc};
 use tracing::debug;
 
 mod command_service;
@@ -80,6 +81,8 @@ impl<Store> ServiceInner<Store> {
     }
 }
 
+pub type StreamingResponse = Pin<Box<dyn Stream<Item = Arc<CommandResponse>> + Send>>;
+
 impl<Store: Storage> Service<Store> {
     pub fn new(store: Store) -> Self {
         Self {
@@ -87,7 +90,7 @@ impl<Store: Storage> Service<Store> {
         }
     }
 
-    pub fn execute(&self, cmd: CommandRequest) -> CommandResponse {
+    pub fn execute(&self, cmd: CommandRequest) -> StreamingResponse {
         debug!("Got request: {:?}", cmd);
         self.inner.process.process_events(&cmd);
 
@@ -95,7 +98,7 @@ impl<Store: Storage> Service<Store> {
         self.inner.process.process_events_mut(&mut res);
         debug!("Executed response: {:?}", res);
 
-        res
+        Box::pin(stream::once(async { Arc::new(res) }))
     }
 }
 
@@ -133,24 +136,28 @@ impl<T, U> Processor<T, U> {
 mod test {
     use super::*;
     use crate::*;
+    use futures::StreamExt;
     use http::StatusCode;
-    use std::thread;
     use tracing::info;
 
-    #[test]
-    fn service_should_work() {
+    #[tokio::test]
+    async fn service_should_work() {
         let service = Service::new(MemTable::default());
         let service_c = service.clone();
-        let handle = thread::spawn(move || {
-            let res = service_c.execute(CommandRequest::new_hset("t1", "k1", "v1".into()));
-            assert_res_ok(res, &[Value::default()], &[]);
-        });
-        handle.join().unwrap();
-        let res = service.execute(CommandRequest::new_hget("t1", "k1"));
-        assert_res_ok(res, &["v1".into()], &[]);
+        let handle = tokio::spawn(async move {
+            let mut res = service_c.execute(CommandRequest::new_hset("t1", "k1", "v1".into()));
+            let res = res.next().await.unwrap();
+            assert_res_ref_ok(&res, &[Value::default()], &[]);
+        })
+        .await
+        .unwrap();
+
+        let mut res = service.execute(CommandRequest::new_hget("t1", "k1"));
+        let res = res.next().await.unwrap();
+        assert_res_ref_ok(&res, &["v1".into()], &[]);
     }
-    #[test]
-    fn hook_should_work() {
+    #[tokio::test]
+    async fn hook_should_work() {
         fn on_received(cmd: &CommandRequest) {
             info!("Received {:?}", cmd);
         }
@@ -165,11 +172,22 @@ mod test {
             .before_send_callback(before_send)
             .received_callback(move |_| info!("HOLA {}", name))
             .into();
-        let res = service.execute(CommandRequest::new_hset("t1", "k1", "v1".into()));
+        let mut res = service.execute(CommandRequest::new_hset("t1", "k1", "v1".into()));
+        let res = res.next().await.unwrap();
         assert_eq!(res.status, StatusCode::CREATED.as_u16() as u32);
         assert_eq!(res.message, "");
         assert_eq!(res.values, vec![Value::default()]);
     }
+}
+
+#[cfg(test)]
+pub fn assert_res_ref_ok(res: &CommandResponse, values: &[Value], pairs: &[Kvpair]) {
+    let mut sorted_pairs = res.pairs.clone();
+    sorted_pairs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    assert_eq!(res.status, 200);
+    assert_eq!(res.message, "");
+    assert_eq!(res.values, values);
+    assert_eq!(res.pairs, pairs);
 }
 
 #[cfg(test)]
