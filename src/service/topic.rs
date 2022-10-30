@@ -1,11 +1,11 @@
-use crate::{CommandResponse, Value};
+use crate::{CommandResponse, KvError, Value};
 use dashmap::{DashMap, DashSet};
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     Arc,
 };
 use tokio::sync::mpsc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 const CAPACITY: usize = 128;
 
@@ -18,7 +18,7 @@ fn get_next_subscription_id() -> u32 {
 
 pub trait Topic: Send + Sync + 'static {
     fn subscribe(self, name: String) -> mpsc::Receiver<Arc<CommandResponse>>;
-    fn unsubscribe(self, name: String, id: u32);
+    fn unsubscribe(self, name: String, id: u32) -> Result<u32, KvError>;
     fn publish(self, name: String, value: Arc<CommandResponse>);
 }
 
@@ -26,6 +26,23 @@ pub trait Topic: Send + Sync + 'static {
 pub struct PubSub {
     topics: DashMap<String, DashSet<u32>>,
     subscriptions: DashMap<u32, mpsc::Sender<Arc<CommandResponse>>>,
+}
+
+impl PubSub {
+    pub fn remove_subscription(&self, name: &String, id: u32) -> Option<u32> {
+        if let Some(v) = self.topics.get_mut(name) {
+            v.remove(&id);
+
+            if v.is_empty() {
+                info!("Topic: {:?} is deleted", name);
+                drop(v);
+                self.topics.remove(name);
+            }
+        }
+
+        debug!("Subscription {} is removed!", id);
+        self.subscriptions.remove(&id).map(|(id, _)| id)
+    }
 }
 
 impl Topic for Arc<PubSub> {
@@ -50,35 +67,32 @@ impl Topic for Arc<PubSub> {
         rx
     }
 
-    fn unsubscribe(self, name: String, id: u32) {
-        if let Some(x) = self.topics.get(&name) {
-            debug!("remove id {} in topics", id);
-            x.remove(&id);
-            if x.is_empty() {
-                debug!("remove topic {} in topics", name);
-                drop(x);
-                self.topics.remove(&name);
-            }
-        };
-        debug!("remove id {} in subscriptions", id);
-        self.subscriptions.remove(&id);
+    fn unsubscribe(self, name: String, id: u32) -> Result<u32, KvError> {
+        match self.remove_subscription(&name, id) {
+            Some(id) => Ok(id),
+            None => Err(KvError::NotFound(name, format!("subscription {}", id))),
+        }
     }
 
     fn publish(self, name: String, value: Arc<CommandResponse>) {
         tokio::spawn(async move {
-            match self.topics.get(&name) {
-                Some(chan) => {
-                    let chan = chan.value().clone();
+            let mut ids = vec![];
+            if let Some(topic) = self.topics.get(&name) {
+                let subscriptions = topic.value().clone();
+                drop(topic);
 
-                    for id in chan.into_iter() {
-                        if let Some(tx) = self.subscriptions.get(&id) {
-                            if let Err(e) = tx.send(value.clone()).await {
-                                warn!("Publish to {} failed! error: {:?}", id, e);
-                            }
+                for id in subscriptions.into_iter() {
+                    if let Some(tx) = self.subscriptions.get(&id) {
+                        if let Err(e) = tx.send(value.clone()).await {
+                            warn!("Publish to {} failed! error: {:?}", id, e);
+                            ids.push(id);
                         }
                     }
                 }
-                None => {}
+            }
+
+            for id in ids {
+                self.remove_subscription(&name, id);
             }
         });
     }

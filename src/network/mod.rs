@@ -2,9 +2,10 @@ mod frame;
 mod multiplex;
 mod noise;
 mod stream;
+mod stream_result;
 mod tls;
 
-use self::{frame::read_frame, stream::FrameStream};
+use self::{frame::read_frame, stream::FrameStream, stream_result::StreamResult};
 use crate::{CommandRequest, CommandResponse, KvError, Service, Storage};
 use bytes::BytesMut;
 pub use frame::FrameCodec;
@@ -86,7 +87,7 @@ where
 
 impl<S> ClientStream<S>
 where
-    S: AsyncRead + AsyncWrite + Unpin + Send,
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     pub fn new(stream: S) -> Self {
         Self {
@@ -94,12 +95,21 @@ where
         }
     }
 
-    pub async fn execute(&mut self, cmd: CommandRequest) -> Result<CommandResponse, KvError> {
-        self.inner.send(&cmd).await?;
+    pub async fn execute(&mut self, cmd: &CommandRequest) -> Result<CommandResponse, KvError> {
+        self.inner.send(cmd).await?;
         match self.inner.next().await {
             Some(v) => v,
             None => Err(KvError::Internal("no response".into())),
         }
+    }
+
+    pub async fn execute_streaming(self, cmd: &CommandRequest) -> Result<StreamResult, KvError> {
+        let mut stream = self.inner;
+
+        stream.send(cmd).await?;
+        stream.close().await?;
+
+        StreamResult::new(stream).await
     }
 }
 
@@ -120,12 +130,12 @@ mod tests {
         let mut client = ClientStream::new(stream);
 
         let cmd = CommandRequest::new_hset("t1", "k1", "v1".into());
-        let res = client.execute(cmd).await.unwrap();
+        let res = client.execute(&cmd).await.unwrap();
 
         assert_res_ok(res, &[Value::default()], &[]);
 
         let cmd = CommandRequest::new_hget("t1", "k1");
-        let res = client.execute(cmd).await?;
+        let res = client.execute(&cmd).await?;
 
         assert_res_ok(res, &["v1".into()], &[]);
 
@@ -141,12 +151,12 @@ mod tests {
 
         let v: Value = Bytes::from(vec![0u8; 1437]).into();
         let cmd = CommandRequest::new_hset("t2", "k2", v.clone().into());
-        let res = client.execute(cmd).await?;
+        let res = client.execute(&cmd).await?;
 
         assert_res_ok(res, &[Value::default()], &[]);
 
         let cmd = CommandRequest::new_hget("t2", "k2");
-        let res = client.execute(cmd).await?;
+        let res = client.execute(&cmd).await?;
 
         assert_res_ok(res, &[v.into()], &[]);
 

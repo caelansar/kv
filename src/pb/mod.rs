@@ -1,16 +1,41 @@
 pub mod abi;
 
+use super::service::topic::Topic;
 use crate::{command_request::RequestData, *};
 use abi::*;
 use bytes::Bytes;
+use futures::stream;
 use http::StatusCode;
 use std::sync::Arc;
 
 impl CommandRequest {
     pub fn dispatch(self, store: &impl Storage) -> CommandResponse {
         match self.request_data {
-            Some(request_data) => request_data.execute(store),
+            Some(request_data) => {
+                if request_data.is_streaming() {
+                    KvError::InvalidCommand("Not command".into()).into()
+                } else {
+                    service::CommandService::execute(request_data, store)
+                }
+            }
             None => KvError::InvalidCommand("Request has no data".into()).into(),
+        }
+    }
+
+    pub fn dispatch_steaming(self, topic: impl Topic) -> StreamingResponse {
+        match self.request_data {
+            Some(request_data) => {
+                if !request_data.is_streaming() {
+                    Box::pin(stream::once(async {
+                        Arc::new(KvError::InvalidCommand("Not steaming command".into()).into())
+                    }))
+                } else {
+                    service::TopicService::execute(request_data, topic)
+                }
+            }
+            None => Box::pin(stream::once(async {
+                Arc::new(KvError::InvalidCommand("Request has no data".into()).into())
+            })),
         }
     }
 
@@ -90,6 +115,32 @@ impl CommandRequest {
             request_data: Some(RequestData::Hmexist(Hmexist {
                 table: table.into(),
                 keys,
+            })),
+        }
+    }
+
+    pub fn new_subscribe(topic: impl Into<String>) -> Self {
+        Self {
+            request_data: Some(RequestData::Subscribe(Subscribe {
+                topic: topic.into(),
+            })),
+        }
+    }
+
+    pub fn new_publish(topic: impl Into<String>, data: Vec<Value>) -> Self {
+        Self {
+            request_data: Some(RequestData::Publish(Publish {
+                topic: topic.into(),
+                data,
+            })),
+        }
+    }
+
+    pub fn new_unsubscribe(topic: impl Into<String>, id: u32) -> Self {
+        Self {
+            request_data: Some(RequestData::Unsubscribe(Unsubscribe {
+                topic: topic.into(),
+                id,
             })),
         }
     }
@@ -247,6 +298,14 @@ impl From<KvError> for CommandResponse {
             KvError::InvalidCommand(_) => result.status = StatusCode::BAD_REQUEST.as_u16() as u32,
             _ => {}
         }
+        result
+    }
+}
+
+impl CommandResponse {
+    pub fn ok() -> Self {
+        let mut result = CommandResponse::default();
+        result.status = StatusCode::OK.as_u16() as u32;
         result
     }
 }

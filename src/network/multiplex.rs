@@ -106,10 +106,10 @@ mod tests {
         let mut client = ClientStream::new(stream);
 
         let cmd = CommandRequest::new_hset("t1", "k1", "v1".into());
-        client.execute(cmd).await.unwrap();
+        client.execute(&cmd).await.unwrap();
 
         let cmd = CommandRequest::new_hget("t1", "k1");
-        let res = client.execute(cmd).await.unwrap();
+        let res = client.execute(&cmd).await.unwrap();
         assert_res_ok(res, &["v1".into()], &[]);
 
         Ok(())

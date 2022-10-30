@@ -1,3 +1,4 @@
+use self::topic::PubSub;
 use crate::{CommandRequest, CommandResponse, MemTable, Storage};
 #[cfg(test)]
 use crate::{Kvpair, Value};
@@ -6,20 +7,35 @@ use std::{pin::Pin, sync::Arc};
 use tracing::debug;
 
 mod command_service;
-mod topic;
+pub mod topic;
+mod topic_service;
 
 pub trait CommandService {
     fn execute(self, store: &impl Storage) -> CommandResponse;
 }
 
+pub type StreamingResponse = Pin<Box<dyn Stream<Item = Arc<CommandResponse>> + Send>>;
+
+impl From<CommandResponse> for StreamingResponse {
+    fn from(cmd: CommandResponse) -> Self {
+        Box::pin(stream::once(async { Arc::new(cmd) }))
+    }
+}
+
+pub trait TopicService {
+    fn execute(self, chan: impl topic::Topic) -> StreamingResponse;
+}
+
 pub struct Service<Store = MemTable> {
     inner: Arc<ServiceInner<Store>>,
+    broadcaster: Arc<PubSub>,
 }
 
 impl<Store> Clone for Service<Store> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
+            broadcaster: Arc::clone(&self.broadcaster),
         }
     }
 }
@@ -57,6 +73,7 @@ impl<Store: Storage> From<ServiceInner<Store>> for Service<Store> {
     fn from(inner: ServiceInner<Store>) -> Self {
         Self {
             inner: Arc::new(inner),
+            broadcaster: Default::default(),
         }
     }
 }
@@ -81,12 +98,11 @@ impl<Store> ServiceInner<Store> {
     }
 }
 
-pub type StreamingResponse = Pin<Box<dyn Stream<Item = Arc<CommandResponse>> + Send>>;
-
 impl<Store: Storage> Service<Store> {
     pub fn new(store: Store) -> Self {
         Self {
             inner: Arc::new(ServiceInner::new(store)),
+            broadcaster: Default::default(),
         }
     }
 
@@ -94,11 +110,15 @@ impl<Store: Storage> Service<Store> {
         debug!("Got request: {:?}", cmd);
         self.inner.process.process_events(&cmd);
 
-        let mut res = cmd.dispatch(&self.inner.store);
-        self.inner.process.process_events_mut(&mut res);
-        debug!("Executed response: {:?}", res);
+        if let Some(true) = cmd.request_data.as_ref().map(|x| x.is_streaming()) {
+            cmd.dispatch_steaming(Arc::clone(&self.broadcaster))
+        } else {
+            let mut res = cmd.dispatch(&self.inner.store);
+            self.inner.process.process_events_mut(&mut res);
+            debug!("Executed response: {:?}", res);
 
-        Box::pin(stream::once(async { Arc::new(res) }))
+            res.into()
+        }
     }
 }
 
@@ -188,6 +208,14 @@ pub fn assert_res_ref_ok(res: &CommandResponse, values: &[Value], pairs: &[Kvpai
     assert_eq!(res.message, "");
     assert_eq!(res.values, values);
     assert_eq!(res.pairs, pairs);
+}
+
+#[cfg(test)]
+pub fn assert_res_ref_error(res: &CommandResponse, code: u32, msg: &str) {
+    assert_eq!(res.status, code);
+    assert!(res.message.contains(msg));
+    assert_eq!(res.values, &[]);
+    assert_eq!(res.pairs, &[]);
 }
 
 #[cfg(test)]

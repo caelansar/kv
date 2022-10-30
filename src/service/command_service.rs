@@ -27,6 +27,28 @@ impl CommandService for RequestData {
     }
 }
 
+impl TopicService for RequestData {
+    fn execute(self, chan: impl service::topic::Topic) -> StreamingResponse {
+        match self {
+            RequestData::Subscribe(param) => param.execute(chan),
+            RequestData::Unsubscribe(param) => param.execute(chan),
+            RequestData::Publish(param) => param.execute(chan),
+            _ => todo!(),
+        }
+    }
+}
+
+impl RequestData {
+    pub fn is_streaming(&self) -> bool {
+        match *self {
+            RequestData::Subscribe(_) | RequestData::Unsubscribe(_) | RequestData::Publish(_) => {
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 impl CommandService for Hset {
     fn execute(self, store: &impl Storage) -> CommandResponse {
         match self.pair {
