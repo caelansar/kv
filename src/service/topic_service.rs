@@ -86,7 +86,7 @@ mod tests {
         let mut res = cmd.dispatch_steaming(topic.clone());
         let id = get_id(&mut res).await;
 
-        let cmd = CommandRequest::new_unsubscribe("cae", id as _);
+        let cmd = CommandRequest::new_unsubscribe("cae", id);
         let mut res = cmd.dispatch_steaming(topic);
         let data = res.next().await.unwrap();
 

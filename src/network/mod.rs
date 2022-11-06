@@ -107,7 +107,7 @@ where
         let mut stream = self.inner;
 
         stream.send(cmd).await?;
-        stream.close().await?;
+        // stream.close().await?;
 
         StreamResult::new(stream).await
     }

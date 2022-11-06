@@ -30,8 +30,6 @@ async fn main() -> Result<()> {
     let stream = ctrl.open_stream().await?;
     let mut client = ClientStream::new(stream);
 
-    start_publish(ClientStream::new(ctrl.open_stream().await?), "async")?;
-
     let cmd = CommandRequest::new_hset("table1", "hello", "world".into());
     info!("client send cmd {:?}", cmd);
     let resp = client.execute(&cmd).await?;
@@ -49,6 +47,9 @@ async fn main() -> Result<()> {
 
     let cmd = CommandRequest::new_subscribe("async");
     let mut stream = client.execute_streaming(&cmd).await?;
+
+    start_publish(ClientStream::new(ctrl.open_stream().await?), "async")?;
+
     let id = stream.id;
     start_unsubscribe(ClientStream::new(ctrl.open_stream().await?), "async", id)?;
 
@@ -77,7 +78,7 @@ fn start_unsubscribe<S>(mut stream: ClientStream<S>, name: &str, id: u32) -> Res
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    let cmd = CommandRequest::new_unsubscribe(name, id as _);
+    let cmd = CommandRequest::new_unsubscribe(name, id);
     tokio::spawn(async move {
         time::sleep(Duration::from_millis(2000)).await;
         let res = stream.execute(&cmd).await.unwrap();

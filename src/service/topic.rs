@@ -68,8 +68,28 @@ impl Topic for Arc<PubSub> {
     }
 
     fn unsubscribe(self, name: String, id: u32) -> Result<u32, KvError> {
-        match self.remove_subscription(&name, id) {
-            Some(id) => Ok(id),
+        if let Some(v) = self.topics.get_mut(&name) {
+            v.remove(&id);
+
+            if v.is_empty() {
+                info!("Topic: {:?} is deleted", name);
+                drop(v);
+                self.topics.remove(&name);
+            }
+        }
+
+        info!("Subscription {} is removed!", id);
+        let s = self.subscriptions.remove(&id);
+
+        match s {
+            Some(sender) => {
+                debug!("send cancel msg");
+                tokio::spawn(async move {
+                    let resp = CommandResponse::unsubscribe_ack();
+                    sender.1.send(Arc::new(resp)).await.unwrap();
+                });
+                Ok(id)
+            }
             None => Err(KvError::NotFound(name, format!("subscription {}", id))),
         }
     }
@@ -101,7 +121,7 @@ impl Topic for Arc<PubSub> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert_res_ok;
+    use crate::{assert_res_error, assert_res_ok};
     use std::convert::TryInto;
 
     #[tokio::test]
@@ -129,14 +149,18 @@ mod tests {
         assert_eq!(res1, res2);
         assert_res_ok(Arc::clone(&res1).as_ref().to_owned(), &[v.clone()], &[]);
 
-        // unsubscribe
-        b.clone().unsubscribe(cae.clone(), id1 as _);
+        // stream1 unsubscribe
+        b.clone().unsubscribe(cae.clone(), id1 as _).unwrap();
 
         // publish
         let v: Value = "world".into();
         b.clone().publish(cae.clone(), Arc::new(v.clone().into()));
 
+        let cancel = stream1.recv().await.unwrap();
+        assert_res_error(Arc::clone(&cancel).as_ref().to_owned(), 0, "");
+
         assert!(stream1.recv().await.is_none());
+
         let res2 = stream2.recv().await.unwrap();
         assert_res_ok(Arc::clone(&res2).as_ref().to_owned(), &[v.clone()], &[]);
     }

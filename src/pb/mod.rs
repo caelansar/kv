@@ -308,6 +308,12 @@ impl CommandResponse {
         result.status = StatusCode::OK.as_u16() as u32;
         result
     }
+
+    pub fn unsubscribe_ack() -> Self {
+        let mut result = CommandResponse::default();
+        result.status = 0;
+        result
+    }
 }
 
 impl From<KvError> for Value {

@@ -2,9 +2,11 @@ use std::{
     convert::TryInto,
     ops::{Deref, DerefMut},
     pin::Pin,
+    task::{Context, Poll},
 };
 
 use futures::{Stream, StreamExt};
+use tracing::info;
 
 use crate::{CommandResponse, KvError};
 
@@ -40,6 +42,25 @@ impl StreamResult {
             inner: Box::pin(stream),
             id: id?,
         })
+    }
+}
+
+impl Stream for StreamResult {
+    type Item = Result<CommandResponse, KvError>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        info!("STREAMRESULT POLL NEXT");
+        let v = Pin::new(&mut self.inner).poll_next(cx);
+        match &v {
+            Poll::Ready(Some(x)) => {
+                if x.as_ref().map_or(false, |resp| resp.status == 0) {
+                    Poll::Ready(None)
+                } else {
+                    v
+                }
+            }
+            _ => v,
+        }
     }
 }
 
