@@ -31,6 +31,9 @@ yamux = "0.10.2"
 tokio-rustls = "0.23.4"
 rustls-pemfile = "1.0.1"
 tokio-stream = "0.1.11"
+s2n-quic = "1"
+zeroize = "1.5.7"
+async-trait = "0.1.58"
 
 [dev-dependencies]
 async-prost = "0.4.0"

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use kv::{KvError, MemTable, ServerStream, Service, TlsServer, YamuxCtrl};
+use s2n_quic::Server;
 use std::future::Future;
 use tokio::{net::TcpListener, signal};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
@@ -12,7 +13,44 @@ async fn main() {
     run(signal::ctrl_c()).await
 }
 
-async fn run_server() -> Result<(), KvError> {
+async fn run_quic_server() -> Result<(), KvError> {
+    let service = Service::new(MemTable::new());
+    let addr = "127.0.0.1:5000";
+
+    let server_cert = include_str!("../certs/server.crt");
+    let server_key = include_str!("../certs/server.key");
+
+    let mut listener = Server::builder()
+        .with_tls((server_cert, server_key))
+        .unwrap()
+        .with_io(addr)
+        .unwrap()
+        .start()
+        .unwrap();
+
+    info!("start listening on {}", addr);
+    loop {
+        if let Some(mut conn) = listener.accept().await {
+            let remote = conn.remote_addr();
+            let svc = service.clone();
+
+            tokio::spawn(async move {
+                while let Ok(Some(stream)) = conn.accept_bidirectional_stream().await {
+                    info!("client {:?} connected", addr);
+                    let svc1 = svc.clone();
+                    tokio::spawn(async move {
+                        let stream = ServerStream::new(stream, svc1.clone());
+                        let _ = stream.process().await;
+                        info!("client {:?} disconnected", remote);
+                    });
+                }
+                Ok::<(), anyhow::Error>(())
+            });
+        }
+    }
+}
+
+async fn run_tcp_server() -> Result<(), KvError> {
     let service = Service::new(MemTable::new());
     let addr = "127.0.0.1:5000";
 
@@ -46,7 +84,7 @@ async fn run_server() -> Result<(), KvError> {
 
 async fn run(shutdown: impl Future) {
     tokio::select! {
-        res = run_server() => {
+        res = run_quic_server() => {
             if let Err(err) = res {
                 error!(cause = %err, "failed to accept");
             }

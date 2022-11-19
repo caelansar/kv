@@ -1,4 +1,7 @@
+use crate::{ClientStream, KvError, MultiplexStream};
+use async_trait::async_trait;
 use futures::{future, AsyncRead as AR, AsyncWrite as AW, Future, TryStreamExt};
+use s2n_quic::{stream::BidirectionalStream, Connection as QuicConn};
 use std::marker::{self, PhantomData};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
@@ -52,10 +55,17 @@ where
             _conn: marker::PhantomData,
         }
     }
+}
 
-    pub async fn open_stream(&mut self) -> Result<Compat<yamux::Stream>, ConnectionError> {
+#[async_trait]
+impl<S> MultiplexStream for YamuxCtrl<S>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    type InnerStream = Compat<yamux::Stream>;
+    async fn open_stream(&mut self) -> Result<ClientStream<Self::InnerStream>, KvError> {
         let stream = self.ctrl.open_stream().await?;
-        Ok(stream.compat())
+        Ok(ClientStream::new(stream.compat()))
     }
 }
 
@@ -102,14 +112,14 @@ mod tests {
         let mut ctrl = YamuxCtrl::new_client(stream, None);
 
         // open new yamux stream
-        let stream = ctrl.open_stream().await?;
-        let mut client = ClientStream::new(stream);
+        let mut stream = ctrl.open_stream().await?;
+        // let mut client = ClientStream::new(stream);
 
         let cmd = CommandRequest::new_hset("t1", "k1", "v1".into());
-        client.execute(&cmd).await.unwrap();
+        stream.execute(&cmd).await.unwrap();
 
         let cmd = CommandRequest::new_hget("t1", "k1");
-        let res = client.execute(&cmd).await.unwrap();
+        let res = stream.execute(&cmd).await.unwrap();
         assert_res_ok(res, &["v1".into()], &[]);
 
         Ok(())

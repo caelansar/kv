@@ -26,10 +26,20 @@ pub enum KvError {
     IOError(String),
     #[error("Internal error: {0}")]
     Internal(String),
+    #[error("Yamux Connection error")]
+    YamuxConnectionError(String),
+    #[error("Quic connection error")]
+    QuicConnectionError(#[from] s2n_quic::connection::Error),
 }
 
 impl From<io::Error> for KvError {
     fn from(i: io::Error) -> Self {
         Self::IOError(i.to_string())
+    }
+}
+
+impl From<yamux::ConnectionError> for KvError {
+    fn from(e: yamux::ConnectionError) -> Self {
+        Self::YamuxConnectionError(e.to_string())
     }
 }
