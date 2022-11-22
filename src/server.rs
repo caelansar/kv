@@ -1,6 +1,7 @@
-use anyhow::Result;
-use kv::{KvError, MemTable, ServerStream, Service, TlsServer, YamuxCtrl};
+use anyhow::{Error, Result};
+use kv::{MemTable, ServerStream, Service, TlsServer, YamuxCtrl};
 use s2n_quic::Server;
+use s2n_quic_rustls::server::Builder;
 use std::future::Future;
 use tokio::{net::TcpListener, signal};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
@@ -13,18 +14,20 @@ async fn main() {
     run(signal::ctrl_c()).await
 }
 
-async fn run_quic_server() -> Result<(), KvError> {
+async fn run_quic_server() -> Result<(), Error> {
     let service = Service::new(MemTable::new());
     let addr = "127.0.0.1:5000";
 
     let server_cert = include_str!("../certs/server.crt");
     let server_key = include_str!("../certs/server.key");
 
+    let config = Builder::new()
+        .with_certificate(server_cert, server_key)?
+        .build()?;
+
     let mut listener = Server::builder()
-        .with_tls((server_cert, server_key))
-        .unwrap()
-        .with_io(addr)
-        .unwrap()
+        .with_tls(config)?
+        .with_io(addr)?
         .start()
         .unwrap();
 
@@ -44,13 +47,13 @@ async fn run_quic_server() -> Result<(), KvError> {
                         info!("client {:?} disconnected", remote);
                     });
                 }
-                Ok::<(), anyhow::Error>(())
+                Ok::<(), Error>(())
             });
         }
     }
 }
 
-async fn run_tcp_server() -> Result<(), KvError> {
+async fn run_tcp_server() -> Result<(), Error> {
     let service = Service::new(MemTable::new());
     let addr = "127.0.0.1:5000";
 
