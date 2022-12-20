@@ -4,6 +4,7 @@ mod noise;
 mod stream;
 mod stream_result;
 mod tls;
+mod tokio_codec;
 
 use self::{frame::read_frame, stream::FrameStream, stream_result::StreamResult};
 use crate::{CommandRequest, CommandResponse, KvError, Service, Storage};
