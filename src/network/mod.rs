@@ -6,7 +6,7 @@ mod stream_result;
 mod tls;
 mod tokio_codec;
 
-use self::{frame::read_frame, stream::FrameStream, stream_result::StreamResult};
+use self::{frame::read_frame, stream_result::StreamResult, tokio_codec::CompressionCodec};
 use crate::{CommandRequest, CommandResponse, KvError, Service, Storage};
 use bytes::BytesMut;
 pub use frame::FrameCodec;
@@ -15,6 +15,7 @@ pub use multiplex::*;
 use std::marker;
 pub use tls::*;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio_util::codec::Framed;
 use tracing::info;
 
 #[deprecated]
@@ -52,13 +53,13 @@ where
     }
 }
 
-pub struct ServerStream<S, Store> {
+pub struct ServerStream<S: AsyncRead + AsyncWrite, Store> {
     service: Service<Store>,
-    inner: FrameStream<S, CommandRequest, CommandResponse>,
+    inner: Framed<S, CompressionCodec<CommandResponse, CommandRequest>>,
 }
 
 pub struct ClientStream<S> {
-    inner: FrameStream<S, CommandResponse, CommandRequest>,
+    inner: Framed<S, CompressionCodec<CommandRequest, CommandResponse>>,
 }
 
 impl<S, Store> ServerStream<S, Store>
@@ -68,7 +69,7 @@ where
 {
     pub fn new(stream: S, service: Service<Store>) -> Self {
         Self {
-            inner: FrameStream::new(stream),
+            inner: Framed::new(stream, CompressionCodec::new()),
             service,
         }
     }
@@ -78,7 +79,7 @@ where
             info!("process command: {:?}", cmd);
             let mut res = self.service.execute(cmd);
             while let Some(data) = res.next().await {
-                self.inner.send(&data).await?;
+                self.inner.send(data.into()).await?;
             }
         }
         info!("process ok, client disconnect");
@@ -92,12 +93,12 @@ where
 {
     pub fn new(stream: S) -> Self {
         Self {
-            inner: FrameStream::new(stream),
+            inner: Framed::new(stream, CompressionCodec::new()),
         }
     }
 
     pub async fn execute(&mut self, cmd: &CommandRequest) -> Result<CommandResponse, KvError> {
-        self.inner.send(cmd).await?;
+        self.inner.send(cmd.clone()).await?;
         match self.inner.next().await {
             Some(v) => v,
             None => Err(KvError::Internal("no response".into())),
@@ -107,7 +108,7 @@ where
     pub async fn execute_streaming(self, cmd: &CommandRequest) -> Result<StreamResult, KvError> {
         let mut stream = self.inner;
 
-        stream.send(cmd).await?;
+        stream.send(cmd.clone()).await?;
         // stream.close().await?;
 
         StreamResult::new(stream).await

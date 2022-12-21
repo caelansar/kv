@@ -15,19 +15,23 @@ const MAX_FRAME: usize = 2u32.pow(31) as usize;
 const COMPRESSION_LIMIT: usize = 1436;
 const COMPRESSION_BIT: usize = 1 << 31;
 
-struct CompressionCodec<T: Message + Sized + Default> {
-    _data: marker::PhantomData<T>,
+pub struct CompressionCodec<T: Message + Sized + Default, U: Message + Sized + Default> {
+    _t: marker::PhantomData<T>,
+    _u: marker::PhantomData<U>,
 }
 
-impl<T: Message + Sized + Default> CompressionCodec<T> {
-    fn new() -> Self {
+impl<T: Message + Sized + Default, U: Message + Sized + Default> CompressionCodec<T, U> {
+    pub fn new() -> Self {
         CompressionCodec {
-            _data: marker::PhantomData,
+            _t: marker::PhantomData,
+            _u: marker::PhantomData,
         }
     }
 }
 
-impl<T: Message + Sized + Default> Encoder<T> for CompressionCodec<T> {
+impl<T: Message + Sized + Default, U: Message + Sized + Default> Encoder<T>
+    for CompressionCodec<T, U>
+{
     type Error = KvError;
 
     fn encode(&mut self, item: T, dst: &mut bytes::BytesMut) -> Result<(), Self::Error> {
@@ -65,12 +69,18 @@ impl<T: Message + Sized + Default> Encoder<T> for CompressionCodec<T> {
     }
 }
 
-impl<T: Message + Sized + Default> Decoder for CompressionCodec<T> {
-    type Item = T;
+impl<T: Message + Sized + Default, U: Message + Sized + Default> Decoder
+    for CompressionCodec<T, U>
+{
+    type Item = U;
 
     type Error = KvError;
 
     fn decode(&mut self, buf: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        if buf.len() < LENGTH {
+            // NOTE: Not enough data
+            return Ok(None);
+        }
         let header = buf.get_u32() as usize;
         let len = header & !COMPRESSION_BIT;
         let compressed = header & COMPRESSION_BIT == COMPRESSION_BIT;
@@ -103,7 +113,7 @@ mod tests {
 
     #[test]
     fn codec_should_work() {
-        let mut codec: CompressionCodec<CommandRequest> = CompressionCodec::new();
+        let mut codec: CompressionCodec<CommandRequest, CommandRequest> = CompressionCodec::new();
         let req = CommandRequest::new_hget("a", "b");
         let req_clone = req.clone();
 
