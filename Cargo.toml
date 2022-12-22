@@ -31,10 +31,10 @@ yamux = "0.10.2"
 tokio-rustls = "0.23.4"
 rustls-pemfile = "1.0.1"
 tokio-stream = "0.1.11"
-s2n-quic = { version="1.13.0", default-features = false, features = ["provider-address-token-default", "provider-tls-rustls"] }
+s2n-quic = { version="1.14.0", default-features = false, features = ["provider-address-token-default", "provider-tls-rustls"] }
 zeroize = "1.5.7"
 async-trait = "0.1.58"
-s2n-quic-rustls = "0.14.0"
+s2n-quic-rustls = "0.15.0"
 
 [dev-dependencies]
 async-prost = "0.4.0"
