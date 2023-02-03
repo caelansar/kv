@@ -23,6 +23,8 @@ impl MemTable {
 }
 
 impl Storage for MemTable {
+    type Iter = impl Iterator<Item = Kvpair>;
+
     fn get(&self, table: &str, key: &str) -> Result<Option<Value>, KvError> {
         let table = self.get_or_create_table(table);
         Ok(table.get(key).map(|v| v.value().clone()))
@@ -51,8 +53,8 @@ impl Storage for MemTable {
             .collect())
     }
 
-    fn get_iter(&self, table: &str) -> Result<Box<dyn Iterator<Item = Kvpair>>, KvError> {
+    fn get_iter(&self, table: &str) -> Result<Self::Iter, KvError> {
         let table = self.get_or_create_table(table);
-        Ok(Box::new(StorageIter::new(table.to_owned().into_iter())))
+        Ok(StorageIter::new(table.to_owned().into_iter()))
     }
 }
