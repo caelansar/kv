@@ -1,4 +1,5 @@
 pub mod memory;
+pub mod sleddb;
 
 use crate::{KvError, Kvpair, Value};
 
