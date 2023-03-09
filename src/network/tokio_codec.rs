@@ -95,8 +95,8 @@ impl<T: Message + Sized + Default, U: Message + Sized + Default> Decoder
             buf.advance(len);
             Ok(Some(msg))
         } else {
-            let msg = Self::Item::decode(&buf[..len])?;
-            buf.advance(len);
+            let buf = buf.split_to(len);
+            let msg = Self::Item::decode(buf)?;
             Ok(Some(msg))
         }
     }
