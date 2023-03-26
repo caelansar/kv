@@ -112,7 +112,7 @@ impl<Store: Storage> Service<Store> {
         self.inner.process.process_events(&cmd);
 
         if let Some(true) = cmd.request_data.as_ref().map(|x| x.is_streaming()) {
-            cmd.dispatch_steaming(Arc::clone(&self.broadcaster))
+            cmd.dispatch_streaming(Arc::clone(&self.broadcaster))
         } else {
             let mut res = cmd.dispatch(&self.inner.store);
             self.inner.process.process_events_mut(&mut res);

@@ -44,7 +44,7 @@ mod tests {
     async fn dispatch_publish_should_work() {
         let topic = Arc::new(PubSub::default());
         let cmd = CommandRequest::new_publish("cae", vec!["hello".into()]);
-        let mut res = cmd.dispatch_steaming(topic);
+        let mut res = cmd.dispatch_streaming(topic);
         let data = res.next().await.unwrap();
         assert_res_ref_ok(&data, &[], &[]);
     }
@@ -53,7 +53,7 @@ mod tests {
     async fn dispatch_subscribe_should_work() {
         let topic = Arc::new(PubSub::default());
         let cmd = CommandRequest::new_subscribe("cae");
-        let mut res = cmd.dispatch_steaming(topic);
+        let mut res = cmd.dispatch_streaming(topic);
         let id = get_id(&mut res).await;
         assert!(id > 0);
     }
@@ -63,7 +63,7 @@ mod tests {
         let topic = Arc::new(PubSub::default());
         let id = {
             let cmd = CommandRequest::new_subscribe("cae");
-            let mut res = cmd.dispatch_steaming(topic.clone());
+            let mut res = cmd.dispatch_streaming(topic.clone());
             let id = get_id(&mut res).await;
             drop(res);
             id as u32
@@ -71,7 +71,7 @@ mod tests {
 
         // this subscription shoud be deletd since it is invalid
         let cmd = CommandRequest::new_publish("cae", vec!["hello".into()]);
-        cmd.dispatch_steaming(topic.clone());
+        cmd.dispatch_streaming(topic.clone());
         time::sleep(Duration::from_millis(10)).await;
 
         // try to delete again, should return KvError
@@ -83,11 +83,11 @@ mod tests {
     async fn dispatch_unsubscribe_should_work() {
         let topic = Arc::new(PubSub::default());
         let cmd = CommandRequest::new_subscribe("cae");
-        let mut res = cmd.dispatch_steaming(topic.clone());
+        let mut res = cmd.dispatch_streaming(topic.clone());
         let id = get_id(&mut res).await;
 
         let cmd = CommandRequest::new_unsubscribe("cae", id);
-        let mut res = cmd.dispatch_steaming(topic);
+        let mut res = cmd.dispatch_streaming(topic);
         let data = res.next().await.unwrap();
 
         assert_res_ref_ok(&data, &[], &[]);
@@ -98,7 +98,7 @@ mod tests {
         let topic = Arc::new(PubSub::default());
 
         let cmd = CommandRequest::new_unsubscribe("cae", 114514);
-        let mut res = cmd.dispatch_steaming(topic);
+        let mut res = cmd.dispatch_streaming(topic);
         let data = res.next().await.unwrap();
 
         assert_res_ref_error(&data, 404, "subscription 114514");

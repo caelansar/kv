@@ -22,12 +22,12 @@ impl CommandRequest {
         }
     }
 
-    pub fn dispatch_steaming(self, topic: impl Topic) -> StreamingResponse {
+    pub fn dispatch_streaming(self, topic: impl Topic) -> StreamingResponse {
         match self.request_data {
             Some(request_data) => {
                 if !request_data.is_streaming() {
                     Box::pin(stream::once(async {
-                        Arc::new(KvError::InvalidCommand("Not steaming command".into()).into())
+                        Arc::new(KvError::InvalidCommand("Not streaming command".into()).into())
                     }))
                 } else {
                     service::TopicService::execute(request_data, topic)
