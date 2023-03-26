@@ -12,6 +12,7 @@ use tokio_rustls::TlsConnector;
 use tokio_rustls::{
     client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor,
 };
+use tracing::debug;
 
 use crate::KvError;
 
@@ -67,7 +68,12 @@ impl TlsServer {
         S: AsyncRead + AsyncWrite + Unpin + Send,
     {
         let acceptor = TlsAcceptor::from(self.inner.clone());
-        Ok(acceptor.accept(stream).await?)
+        Ok(acceptor
+            .accept_with(stream, |x| {
+                println!(">alpn_protocol{:?}", x.alpn_protocol());
+                println!(">is_handshaking{:?}", x.is_handshaking());
+            })
+            .await?)
     }
 }
 

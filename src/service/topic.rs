@@ -5,7 +5,7 @@ use std::sync::{
     Arc,
 };
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 const CAPACITY: usize = 128;
 
@@ -46,6 +46,7 @@ impl PubSub {
 }
 
 impl Topic for Arc<PubSub> {
+    #[instrument(name = "topic_subscribe", skip_all)]
     fn subscribe(self, name: String) -> mpsc::Receiver<Arc<CommandResponse>> {
         let id = {
             let entry = self.topics.entry(name.clone()).or_default();
@@ -67,6 +68,7 @@ impl Topic for Arc<PubSub> {
         rx
     }
 
+    #[instrument(name = "topic_unsubscribe", skip_all)]
     fn unsubscribe(self, name: String, id: u32) -> Result<u32, KvError> {
         if let Some(v) = self.topics.get_mut(&name) {
             v.remove(&id);
@@ -94,6 +96,7 @@ impl Topic for Arc<PubSub> {
         }
     }
 
+    #[instrument(name = "topic_publish", skip_all)]
     fn publish(self, name: String, value: Arc<CommandResponse>) {
         tokio::spawn(async move {
             let mut ids = vec![];

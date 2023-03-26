@@ -24,7 +24,7 @@ flate2 = "1.0.24"
 anyhow = "1.0"
 snowstorm = "0.4.0"
 tokio = { version = "1.20.0", features = ["full"] }
-tracing-subscriber = "0.2.0"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 futures = "0.3"
 tokio-util = { version = "0.7.3", features = ["compat", "codec"]}
 yamux = "0.10.2"
@@ -35,6 +35,8 @@ s2n-quic = { version="1.14.0", default-features = false, features = ["provider-a
 zeroize = "1.5.7"
 async-trait = "0.1.58"
 s2n-quic-rustls = "0.15.0"
+tracing-opentelemetry = "0.17"
+opentelemetry-jaeger = "0.16"
 
 [dev-dependencies]
 async-prost = "0.4.0"

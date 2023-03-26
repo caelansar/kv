@@ -4,7 +4,7 @@ use crate::{CommandRequest, CommandResponse, MemTable, Storage};
 use crate::{Kvpair, Value};
 use futures::{stream, Stream};
 use std::{pin::Pin, sync::Arc};
-use tracing::debug;
+use tracing::{debug, instrument};
 
 mod command_service;
 pub mod topic;
@@ -106,6 +106,7 @@ impl<Store: Storage> Service<Store> {
         }
     }
 
+    #[instrument(name = "service_execute", skip_all)]
     pub fn execute(&self, cmd: CommandRequest) -> StreamingResponse {
         debug!("Got request: {:?}", cmd);
         self.inner.process.process_events(&cmd);
