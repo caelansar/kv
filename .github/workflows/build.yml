@@ -11,29 +11,20 @@ env:
 
 jobs:
   build:
-    strategy: 
-      matrix: 
-        platform: [ubuntu-latest, windows-latest] 
+    strategy:
+      matrix:
+        platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Cache cargo registry
-      uses: actions/cache@v1
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry
-    - name: Cache cargo index
-      uses: actions/cache@v3.0.11
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index
-    - name: Cache cargo build
-      uses: actions/cache@v3.0.11
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Install Rust
+        run: rustup toolchain install stable --component llvm-tools-preview
+      - name: Check code format
+        run: cargo fmt -- --check
+      - name: Check the package for errors
+        run: cargo check --all
+      - name: Execute rust tests
+        run: cargo nextest run --all-features
