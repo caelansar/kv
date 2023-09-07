@@ -1,10 +1,9 @@
 use anyhow::Result;
-use kv::{ClientStream, CommandRequest, KvError, MultiplexStream, QuicCtrl, TlsClient, YamuxCtrl};
+use kv::{ClientStream, CommandRequest, KvError, MultiplexStream, QuicCtrl};
 use s2n_quic::{client::Connect, Client};
 use std::{net::SocketAddr, time::Duration};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    net::TcpStream,
     time,
 };
 use tokio_stream::StreamExt;
@@ -12,7 +11,9 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .event_format(tracing_subscriber::fmt::format::json())
+        .init();
     let addr = "127.0.0.1:5000";
     // let stream = TcpStream::connect(addr).await?;
 
