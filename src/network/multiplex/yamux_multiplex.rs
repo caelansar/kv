@@ -57,7 +57,6 @@ where
     }
 }
 
-#[async_trait]
 impl<S> MultiplexStream for YamuxCtrl<S>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,

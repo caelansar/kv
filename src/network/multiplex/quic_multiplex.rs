@@ -13,7 +13,6 @@ impl QuicCtrl {
     }
 }
 
-#[async_trait]
 impl MultiplexStream for QuicCtrl {
     type InnerStream = BidirectionalStream;
 
