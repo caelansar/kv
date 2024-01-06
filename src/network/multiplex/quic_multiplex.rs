@@ -1,5 +1,4 @@
 use crate::{ClientStream, KvError, MultiplexStream};
-use async_trait::async_trait;
 use s2n_quic::{stream::BidirectionalStream, Connection as QuicConn};
 use tracing::instrument;
 

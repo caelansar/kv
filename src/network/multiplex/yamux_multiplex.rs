@@ -1,7 +1,5 @@
 use crate::{ClientStream, KvError, MultiplexStream};
-use async_trait::async_trait;
 use futures::{future, AsyncRead as AR, AsyncWrite as AW, Future, TryStreamExt};
-use s2n_quic::{stream::BidirectionalStream, Connection as QuicConn};
 use std::marker::{self, PhantomData};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
@@ -42,7 +40,6 @@ where
         };
 
         let mut config = config.unwrap_or_default();
-        config.set_window_update_mode(WindowUpdateMode::OnRead);
 
         let conn = Connection::new(stream.compat(), config, mode);
 
@@ -68,12 +65,12 @@ where
     }
 }
 
-type YamulResult<T> = std::result::Result<T, yamux::ConnectionError>;
+type YamuxResult<T> = std::result::Result<T, yamux::ConnectionError>;
 
 /// Convert a Yamux connection into a futures::Stream
 fn into_stream<T>(
     c: yamux::Connection<T>,
-) -> impl futures::stream::Stream<Item = YamulResult<yamux::Stream>>
+) -> impl futures::stream::Stream<Item = YamuxResult<yamux::Stream>>
 where
     T: AR + AW + Unpin,
 {
