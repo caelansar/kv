@@ -6,8 +6,8 @@ use abi::*;
 use bytes::Bytes;
 use futures::stream;
 use http::StatusCode;
-use std::sync::Arc;
 use prost::Message;
+use std::sync::Arc;
 
 impl CommandRequest {
     pub fn dispatch(self, store: &impl Storage) -> CommandResponse {

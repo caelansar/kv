@@ -1,5 +1,5 @@
-pub mod memory;
 mod db;
+pub mod memory;
 
 use crate::{KvError, Kvpair, Value};
 
