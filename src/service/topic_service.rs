@@ -66,7 +66,7 @@ mod tests {
             let mut res = cmd.dispatch_streaming(topic.clone());
             let id = get_id(&mut res).await;
             drop(res);
-            id as u32
+            id
         };
 
         // this subscription shoud be deletd since it is invalid

@@ -30,6 +30,8 @@ pub enum KvError {
     YamuxConnectionError(String),
     #[error("Quic connection error")]
     QuicConnectionError(#[from] s2n_quic::connection::Error),
+    #[error("Failed to access sled db")]
+    SledError(#[from] sled::Error),
 }
 
 impl From<io::Error> for KvError {

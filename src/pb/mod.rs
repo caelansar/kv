@@ -7,6 +7,7 @@ use bytes::Bytes;
 use futures::stream;
 use http::StatusCode;
 use std::sync::Arc;
+use prost::Message;
 
 impl CommandRequest {
     pub fn dispatch(self, store: &impl Storage) -> CommandResponse {
@@ -171,6 +172,15 @@ impl From<&str> for Value {
     }
 }
 
+impl TryFrom<&[u8]> for Value {
+    type Error = KvError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        let msg = Value::decode(data)?;
+        Ok(msg)
+    }
+}
+
 impl From<i64> for Value {
     fn from(u: i64) -> Self {
         Self {
@@ -237,6 +247,15 @@ impl From<Arc<CommandResponse>> for CommandResponse {
             values: a.values.clone(),
             pairs: a.pairs.clone(),
         }
+    }
+}
+
+impl TryFrom<Value> for Vec<u8> {
+    type Error = KvError;
+    fn try_from(v: Value) -> Result<Self, Self::Error> {
+        let mut buf = Vec::with_capacity(v.encoded_len());
+        v.encode(&mut buf)?;
+        Ok(buf)
     }
 }
 

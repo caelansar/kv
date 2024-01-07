@@ -12,7 +12,6 @@ use tokio_rustls::TlsConnector;
 use tokio_rustls::{
     client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor,
 };
-use tracing::debug;
 
 use crate::KvError;
 

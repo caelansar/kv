@@ -99,10 +99,7 @@ where
 
     pub async fn execute(&mut self, cmd: &CommandRequest) -> Result<CommandResponse, KvError> {
         self.inner.send(cmd.clone()).await?;
-        match self.inner.next().await {
-            Some(v) => v,
-            None => Err(KvError::Internal("no response".into())),
-        }
+        self.inner.next().await.unwrap_or_else(|| Err(KvError::Internal("no response".into())))
     }
 
     pub async fn execute_streaming(self, cmd: &CommandRequest) -> Result<StreamResult, KvError> {
