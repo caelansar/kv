@@ -288,7 +288,7 @@ impl TryFrom<&CommandResponse> for i64 {
         if value.status != StatusCode::OK.as_u16() as u32 {
             return Err(KvError::Internal("CommandResponse".into()));
         }
-        match value.values.get(0) {
+        match value.values.first() {
             Some(v) => v.try_into(),
             None => Err(KvError::Internal("CommandResponse".into())),
         }
@@ -329,9 +329,7 @@ impl CommandResponse {
     }
 
     pub fn unsubscribe_ack() -> Self {
-        let mut result = CommandResponse::default();
-        result.status = 0;
-        result
+        CommandResponse::default()
     }
 }
 

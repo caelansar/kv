@@ -96,7 +96,7 @@ impl CommandService for Hmset {
             .into_iter()
             .map(
                 |pair| match store.set(&self.table, pair.key, pair.value.unwrap_or_default()) {
-                    Ok(Some(v)) => v.into(),
+                    Ok(Some(v)) => v,
                     _ => Value::default(),
                 },
             )
@@ -110,7 +110,7 @@ impl CommandService for Hmget {
         self.keys
             .iter()
             .map(|key| match store.get(&self.table, key) {
-                Ok(Some(v)) => v.into(),
+                Ok(Some(v)) => v,
                 _ => Value::default(),
             })
             .collect::<Vec<_>>()
@@ -122,7 +122,7 @@ impl CommandService for Hmexist {
         self.keys
             .iter()
             .map(|key| match store.contains(&self.table, key) {
-                Ok(v) => Value::from(v).into(),
+                Ok(v) => Value::from(v),
                 Err(e) => e.into(),
             })
             .collect::<Vec<Value>>()

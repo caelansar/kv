@@ -142,7 +142,7 @@ fn load_certs(cert: &str) -> Result<Vec<Certificate>, KvError> {
     Ok(rustls_pemfile::certs(&mut reader)
         .map_err(|_| KvError::CertifcateParseError("server", "cert"))?
         .into_iter()
-        .map(|v| Certificate(v))
+        .map(Certificate)
         .collect())
 }
 

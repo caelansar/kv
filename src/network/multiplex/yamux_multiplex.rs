@@ -3,7 +3,7 @@ use futures::{future, AsyncRead as AR, AsyncWrite as AW, Future, TryStreamExt};
 use std::marker::{self, PhantomData};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
-use yamux::{Config, Connection, ConnectionError, Control, Mode, WindowUpdateMode};
+use yamux::{Config, Connection, ConnectionError, Control, Mode};
 
 pub struct YamuxCtrl<S> {
     ctrl: Control,
@@ -39,7 +39,7 @@ where
             Mode::Server
         };
 
-        let mut config = config.unwrap_or_default();
+        let config = config.unwrap_or_default();
 
         let conn = Connection::new(stream.compat(), config, mode);
 
@@ -89,7 +89,7 @@ mod tests {
     use crate::{
         assert_res_ok,
         network::noise::{NoiseClient, NoiseServer},
-        ClientStream, CommandRequest, MemTable, ServerStream, Service, ServiceInner, Storage,
+        CommandRequest, MemTable, ServerStream, Service, ServiceInner, Storage,
     };
     use anyhow::Result;
     use std::net::SocketAddr;
