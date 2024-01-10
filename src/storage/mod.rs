@@ -9,7 +9,7 @@ pub trait Storage {
     fn contains(&self, table: &str, key: &str) -> Result<bool, KvError>;
     fn del(&self, table: &str, key: &str) -> Result<Option<Value>, KvError>;
     fn get_all(&self, table: &str) -> Result<Vec<Kvpair>, KvError>;
-    fn get_iter(&self, table: &str) -> Result<Box<dyn Iterator<Item = Kvpair>>, KvError>;
+    fn get_iter(&self, table: &str) -> Result<impl Iterator<Item = Kvpair>, KvError>;
 }
 
 pub struct StorageIter<T> {
