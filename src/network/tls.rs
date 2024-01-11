@@ -55,7 +55,7 @@ impl TlsServer {
             .with_single_cert_with_ocsp_and_sct(certs, key, vec![], vec![])
             .expect("bad certificates/private key");
 
-        config.alpn_protocols = vec![Vec::from(&ALPN[..]).into()];
+        config.alpn_protocols = vec![Vec::from(ALPN)];
 
         Ok(Self {
             inner: Arc::new(config),

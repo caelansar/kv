@@ -40,12 +40,10 @@ impl TopicService for RequestData {
 
 impl RequestData {
     pub fn is_streaming(&self) -> bool {
-        match *self {
-            RequestData::Subscribe(_) | RequestData::Unsubscribe(_) | RequestData::Publish(_) => {
-                true
-            }
-            _ => false,
-        }
+        matches!(
+            *self,
+            RequestData::Subscribe(_) | RequestData::Unsubscribe(_) | RequestData::Publish(_)
+        )
     }
 }
 
