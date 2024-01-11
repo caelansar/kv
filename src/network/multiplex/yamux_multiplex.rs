@@ -1,57 +1,93 @@
 use crate::{ClientStream, KvError, MultiplexStream};
-use futures::{future, AsyncRead as AR, AsyncWrite as AW, Future, TryStreamExt};
-use std::marker::{self, PhantomData};
+use futures::{
+    future, AsyncRead as AR, AsyncWrite as AW, Future, StreamExt, TryFutureExt, TryStreamExt,
+};
+use std::marker::PhantomData;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::mpsc;
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
-use yamux::{Config, Connection, ConnectionError, Control, Mode};
+use yamux::{Config, Connection, ConnectionError, Mode};
 
 pub struct YamuxCtrl<S> {
-    ctrl: Control,
+    sender: mpsc::Sender<ControlMessage>,
     _conn: PhantomData<S>,
+    // ctrl: Connection<Compat<S>>,
+}
+
+enum ControlMessage {
+    OpenStream(mpsc::Sender<yamux::Stream>),
 }
 
 impl<S> YamuxCtrl<S>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    pub fn new_client(stream: S, config: Option<Config>) -> Self {
-        Self::new(stream, config, true, |_stream| future::ready(Ok(())))
-    }
-
-    pub fn new_server<F, Fut>(stream: S, config: Option<Config>, f: F) -> Self
+    pub fn new_server<F, Fut>(stream: S, config: Option<Config>, f: F)
     where
         F: FnMut(yamux::Stream) -> Fut,
         F: Send + 'static,
         Fut: Future<Output = Result<(), ConnectionError>> + Send + 'static,
     {
-        Self::new(stream, config, false, f)
-    }
-
-    fn new<F, Fut>(stream: S, config: Option<Config>, is_client: bool, f: F) -> Self
-    where
-        F: FnMut(yamux::Stream) -> Fut,
-        F: Send + 'static,
-        Fut: Future<Output = Result<(), ConnectionError>> + Send + 'static,
-    {
-        let mode = if is_client {
-            Mode::Client
-        } else {
-            Mode::Server
-        };
-
         let config = config.unwrap_or_default();
 
-        let conn = Connection::new(stream.compat(), config, mode);
+        let mut conn = Connection::new(stream.compat(), config, Mode::Server);
 
-        let ctrl = conn.control();
+        tokio::spawn(
+            futures::stream::poll_fn(move |cx| conn.poll_next_inbound(cx))
+                .try_for_each_concurrent(None, f),
+        );
+    }
 
-        tokio::spawn(into_stream(conn).try_for_each_concurrent(None, f));
+    pub fn new_client(stream: S, config: Option<Config>) -> Self {
+        let config = config.unwrap_or_default();
+
+        let mut conn = Connection::new(stream.compat(), config, Mode::Client);
+
+        let (sender, mut receiver) = mpsc::channel(32);
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    // Process control messages (opening new streams)
+                    Some(ref message) = receiver.recv() => {
+                       match message {
+                            ControlMessage::OpenStream(resp_sender) => {
+                                let stream = future::poll_fn(|cx| conn.poll_new_outbound(cx))
+                                    .await
+                                    .unwrap();
+
+                                resp_sender.send(stream).await.unwrap()
+                            }
+                        }
+                    }
+                    // Drive the connection by repeatedly calling poll_next_inbound
+                    _ = noop_server(
+                        futures::stream::poll_fn(|cx| {
+                            conn.poll_next_inbound(cx)
+                        })
+                    ) => {
+                        unreachable!()
+                    }
+                }
+            }
+        });
 
         Self {
-            ctrl,
-            _conn: marker::PhantomData,
+            sender,
+            _conn: Default::default(),
         }
     }
+}
+
+/// For each incoming stream, do nothing.
+pub async fn noop_server(
+    c: impl futures::Stream<Item = Result<yamux::Stream, yamux::ConnectionError>>,
+) {
+    c.for_each_concurrent(None, |maybe_stream| {
+        drop(maybe_stream);
+        future::ready(())
+    })
+    .await;
 }
 
 impl<S> MultiplexStream for YamuxCtrl<S>
@@ -60,27 +96,15 @@ where
 {
     type InnerStream = Compat<yamux::Stream>;
     async fn open_stream(&mut self) -> Result<ClientStream<Self::InnerStream>, KvError> {
-        let stream = self.ctrl.open_stream().await?;
+        let (resp_sender, mut resp_receiver) = mpsc::channel(1);
+        self.sender
+            .send(ControlMessage::OpenStream(resp_sender))
+            .await
+            .unwrap();
+        let stream = resp_receiver.recv().await.unwrap();
+
         Ok(ClientStream::new(stream.compat()))
     }
-}
-
-type YamuxResult<T> = std::result::Result<T, yamux::ConnectionError>;
-
-/// Convert a Yamux connection into a futures::Stream
-fn into_stream<T>(
-    c: yamux::Connection<T>,
-) -> impl futures::stream::Stream<Item = YamuxResult<yamux::Stream>>
-where
-    T: AR + AW + Unpin,
-{
-    futures::stream::unfold(c, |mut c| async {
-        match c.next_stream().await {
-            Ok(None) => None,
-            Ok(Some(stream)) => Some((Ok(stream), c)),
-            Err(_) => None,
-        }
-    })
 }
 
 #[cfg(test)]
@@ -148,6 +172,7 @@ mod tests {
             loop {
                 match listener.accept().await {
                     Ok((stream, _addr)) => match acceptor.accept(stream).await {
+                        // new server stream
                         Ok(stream) => f(stream, service.clone()),
                         Err(e) => warn!("failed to process noise handshake: {:?}", e),
                     },
