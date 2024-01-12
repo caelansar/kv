@@ -2,7 +2,7 @@ use crate::{ClientStream, KvError, MultiplexStream};
 use futures::{future, Future, StreamExt, TryStreamExt};
 use std::marker::PhantomData;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use yamux::{Config, Connection, ConnectionError, Mode};
 
@@ -12,7 +12,7 @@ pub struct YamuxCtrl<S> {
 }
 
 enum ControlMessage {
-    OpenStream(mpsc::Sender<yamux::Stream>),
+    OpenStream(oneshot::Sender<yamux::Stream>),
 }
 
 impl<S> YamuxCtrl<S>
@@ -46,14 +46,14 @@ where
             loop {
                 tokio::select! {
                     // Process control messages (opening new streams)
-                    Some(ref message) = receiver.recv() => {
+                    Some(message) = receiver.recv() => {
                        match message {
                             ControlMessage::OpenStream(resp_sender) => {
                                 let stream = future::poll_fn(|cx| conn.poll_new_outbound(cx))
                                     .await
                                     .unwrap();
 
-                                resp_sender.send(stream).await.unwrap()
+                                resp_sender.send(stream).unwrap()
                             }
                         }
                     }
@@ -93,12 +93,12 @@ where
 {
     type InnerStream = Compat<yamux::Stream>;
     async fn open_stream(&mut self) -> Result<ClientStream<Self::InnerStream>, KvError> {
-        let (resp_sender, mut resp_receiver) = mpsc::channel(1);
+        let (resp_sender, mut resp_receiver) = oneshot::channel();
         self.sender
             .send(ControlMessage::OpenStream(resp_sender))
             .await
             .unwrap();
-        let stream = resp_receiver.recv().await.unwrap();
+        let stream = resp_receiver.await.unwrap();
 
         Ok(ClientStream::new(stream.compat()))
     }
