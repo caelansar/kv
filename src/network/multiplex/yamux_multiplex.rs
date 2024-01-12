@@ -1,7 +1,5 @@
 use crate::{ClientStream, KvError, MultiplexStream};
-use futures::{
-    future, AsyncRead as AR, AsyncWrite as AW, Future, StreamExt, TryFutureExt, TryStreamExt,
-};
+use futures::{future, Future, StreamExt, TryStreamExt};
 use std::marker::PhantomData;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
@@ -11,7 +9,6 @@ use yamux::{Config, Connection, ConnectionError, Mode};
 pub struct YamuxCtrl<S> {
     sender: mpsc::Sender<ControlMessage>,
     _conn: PhantomData<S>,
-    // ctrl: Connection<Compat<S>>,
 }
 
 enum ControlMessage {
