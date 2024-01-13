@@ -130,14 +130,28 @@ mod tests {
 
         // open new yamux stream
         let mut stream = ctrl.open_stream().await?;
+        let mut stream1 = ctrl.open_stream().await?;
+
         // let mut client = ClientStream::new(stream);
 
         let cmd = CommandRequest::new_hset("t1", "k1", "v1".into());
-        stream.execute(&cmd).await.unwrap();
+        stream.execute(&cmd).await?;
 
         let cmd = CommandRequest::new_hget("t1", "k1");
-        let res = stream.execute(&cmd).await.unwrap();
+        let res = stream.execute(&cmd).await?;
         assert_res_ok(res, &["v1".into()], &[]);
+
+        stream1
+            .execute(&CommandRequest::new_hset("t1", "k", "v".into()))
+            .await?;
+        let res = stream1
+            .execute(&CommandRequest::new_hget("t1", "k1"))
+            .await?;
+        assert_res_ok(res, &["v1".into()], &[]);
+        let res = stream1
+            .execute(&CommandRequest::new_hget("t1", "k"))
+            .await?;
+        assert_res_ok(res, &["v".into()], &[]);
 
         Ok(())
     }
