@@ -1,6 +1,8 @@
+use crate::network::{Acceptor, Connector};
 use anyhow::Result;
 use snow::{params::NoiseParams, Builder};
 use snowstorm::{NoiseStream, SnowstormError};
+use std::future::Future;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub struct NoiseServer<'a> {
@@ -33,6 +35,17 @@ impl<'a> NoiseServer<'a> {
     }
 }
 
+impl<S> Acceptor<S> for NoiseServer<'_>
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    type Output = NoiseStream<S>;
+    type Error = SnowstormError;
+    fn accept(&self, input: S) -> impl Future<Output = Result<Self::Output, Self::Error>> + Send {
+        async move { NoiseServer::accept(&self, input).await }
+    }
+}
+
 impl<'a> NoiseClient<'a> {
     pub fn new(secret: &'a [u8]) -> Self {
         Self { secret }
@@ -51,6 +64,17 @@ impl<'a> NoiseClient<'a> {
             .build_initiator()?;
         // Start handshaking
         NoiseStream::handshake(stream, noise).await
+    }
+}
+
+impl<S> Connector<S> for NoiseClient<'_>
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    type Output = NoiseStream<S>;
+    type Error = SnowstormError;
+    fn connect(&self, input: S) -> impl Future<Output = Result<Self::Output, Self::Error>> + Send {
+        async move { NoiseClient::connect(self, input).await }
     }
 }
 

@@ -12,11 +12,31 @@ use bytes::BytesMut;
 pub use frame::FrameCodec;
 use futures::{SinkExt, StreamExt};
 pub use multiplex::*;
+use std::fmt::Debug;
+use std::future::Future;
 use std::marker;
 pub use tls::*;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_util::codec::Framed;
 use tracing::info;
+
+trait Acceptor<Input> {
+    type Output: AsyncRead + AsyncWrite + Send + Unpin;
+    type Error: Debug;
+    fn accept(
+        &self,
+        input: Input,
+    ) -> impl Future<Output = anyhow::Result<Self::Output, Self::Error>> + Send;
+}
+
+trait Connector<Input> {
+    type Output: AsyncRead + AsyncWrite + Send + Unpin + 'static;
+    type Error: Debug;
+    fn connect(
+        &self,
+        input: Input,
+    ) -> impl Future<Output = anyhow::Result<Self::Output, Self::Error>> + Send;
+}
 
 #[deprecated]
 pub struct FrameIO<S, F, T> {

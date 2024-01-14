@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::io::{BufReader, Cursor};
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ use tokio_rustls::{
     client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor,
 };
 
+use crate::network::{Acceptor, Connector};
 use crate::KvError;
 
 const ALPN: &str = "kv";
@@ -76,6 +78,20 @@ impl TlsServer {
     }
 }
 
+impl<S> Acceptor<S> for TlsServer
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    type Output = ServerTlsStream<S>;
+    type Error = KvError;
+    fn accept(
+        &self,
+        input: S,
+    ) -> impl Future<Output = anyhow::Result<Self::Output, Self::Error>> + Send {
+        async move { TlsServer::accept(&self, input).await }
+    }
+}
+
 impl TlsClient {
     pub fn new(
         domain: impl Into<String>,
@@ -133,6 +149,20 @@ impl TlsClient {
             .await?;
 
         Ok(stream)
+    }
+}
+
+impl<S> Connector<S> for TlsClient
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    type Output = ClientTlsStream<S>;
+    type Error = KvError;
+    fn connect(
+        &self,
+        input: S,
+    ) -> impl Future<Output = anyhow::Result<Self::Output, Self::Error>> + Send {
+        async move { TlsClient::connect(self, input).await }
     }
 }
 

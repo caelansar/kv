@@ -93,7 +93,7 @@ where
 {
     type InnerStream = Compat<yamux::Stream>;
     async fn open_stream(&mut self) -> Result<ClientStream<Self::InnerStream>, KvError> {
-        let (resp_sender, mut resp_receiver) = oneshot::channel();
+        let (resp_sender, resp_receiver) = oneshot::channel();
         self.sender
             .send(ControlMessage::OpenStream(resp_sender))
             .await
@@ -107,10 +107,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::network::{Acceptor, Connector};
     use crate::{
         assert_res_ok,
         network::noise::{NoiseClient, NoiseServer},
-        CommandRequest, MemTable, ServerStream, Service, ServiceInner, Storage,
+        CommandRequest, MemTable, ServerStream, Service, ServiceInner, Storage, TlsClient,
+        TlsServer,
     };
     use anyhow::Result;
     use std::net::SocketAddr;
@@ -124,7 +126,34 @@ mod tests {
 
         let connector = NoiseClient::new(b"keykeykeykeykeykeykeykeykeykeyke");
         let stream = TcpStream::connect(addr).await.unwrap();
+
+        run_test(connector, stream).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn yamux_ctrl_with_tls_client_server_should_work() -> Result<()> {
+        const CA_CERT: &str = include_str!("../../../certs/ca.crt");
+        const CLIENT_CERT: &str = include_str!("../../../certs/client.crt");
+        const CLIENT_KEY: &str = include_str!("../../../certs/client.key");
+        const SERVER_CERT: &str = include_str!("../../../certs/server.crt");
+        const SERVER_KEY: &str = include_str!("../../../certs/server.key");
+
+        let acceptor = TlsServer::new(SERVER_CERT, SERVER_KEY, None)?;
+        let addr = start_yamux_server("127.0.0.1:8888", acceptor, MemTable::new()).await?;
+
+        let connector = TlsClient::new("kv.test.com", None, Some(CA_CERT))?;
+        let stream = TcpStream::connect(addr).await?;
+
+        run_test(connector, stream).await?;
+
+        Ok(())
+    }
+
+    async fn run_test<S>(connector: impl Connector<S> + Send, stream: S) -> Result<()> {
         let stream = connector.connect(stream).await.unwrap();
+
         // yamux client with noise
         let mut ctrl = YamuxCtrl::new_client(stream, None);
 
@@ -156,13 +185,13 @@ mod tests {
         Ok(())
     }
 
-    async fn start_yamux_server<S: 'static>(
+    async fn start_yamux_server<S>(
         addr: &str,
-        acceptor: NoiseServer<'static>,
+        acceptor: impl Acceptor<TcpStream> + Send + 'static,
         store: S,
     ) -> Result<SocketAddr>
     where
-        S: Storage + Send + Sync,
+        S: Storage + Send + Sync + 'static,
     {
         let addr: SocketAddr = addr.parse().unwrap();
         let listener = TcpListener::bind(addr).await.unwrap();
