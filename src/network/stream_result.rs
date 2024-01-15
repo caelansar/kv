@@ -1,6 +1,5 @@
 use std::{
     convert::TryInto,
-    ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -61,19 +60,5 @@ impl Stream for StreamResult {
             }
             _ => v,
         }
-    }
-}
-
-impl Deref for StreamResult {
-    type Target = Pin<Box<dyn Stream<Item = Result<CommandResponse, KvError>> + Send>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for StreamResult {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
     }
 }
