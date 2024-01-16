@@ -126,8 +126,12 @@ mod tests {
 
         let connector = NoiseClient::new(b"keykeykeykeykeykeykeykeykeykeyke");
         let stream = TcpStream::connect(addr).await.unwrap();
+        let stream = connector.connect(stream).await.unwrap();
 
-        run_test(connector, stream).await?;
+        // yamux client with noise
+        let ctrl = YamuxCtrl::new_client(stream, None);
+
+        run_test(ctrl).await?;
 
         Ok(())
     }
@@ -146,29 +150,34 @@ mod tests {
         let connector = TlsClient::new("kv.test.com", None, Some(CA_CERT))?;
         let stream = TcpStream::connect(addr).await?;
 
-        run_test(connector, stream).await?;
+        let stream = connector.connect(stream).await.unwrap();
+
+        // yamux client with tls
+        let ctrl = YamuxCtrl::new_client(stream, None);
+
+        run_test(ctrl).await?;
 
         Ok(())
     }
 
-    async fn run_test<S>(connector: impl Connector<S> + Send, stream: S) -> Result<()> {
-        let stream = connector.connect(stream).await.unwrap();
-
-        // yamux client with noise
-        let mut ctrl = YamuxCtrl::new_client(stream, None);
-
+    async fn run_test<T>(mut ctrl: T) -> Result<()>
+    where
+        T: MultiplexStream + Send + 'static,
+        <T as MultiplexStream>::InnerStream: Send + Unpin + AsyncWrite + AsyncRead + 'static,
+    {
         // open new yamux stream
-        let mut stream = ctrl.open_stream().await?;
         let mut stream1 = ctrl.open_stream().await?;
 
-        // let mut client = ClientStream::new(stream);
+        tokio::spawn(async move {
+            let mut stream = ctrl.open_stream().await.unwrap();
 
-        let cmd = CommandRequest::new_hset("t1", "k1", "v1".into());
-        stream.execute(&cmd).await?;
+            let cmd = CommandRequest::new_hset("t1", "k1", "v1".into());
+            stream.execute(&cmd).await.unwrap();
 
-        let cmd = CommandRequest::new_hget("t1", "k1");
-        let res = stream.execute(&cmd).await?;
-        assert_res_ok(res, &["v1".into()], &[]);
+            let cmd = CommandRequest::new_hget("t1", "k1");
+            let res = stream.execute(&cmd).await.unwrap();
+            assert_res_ok(res, &["v1".into()], &[]);
+        });
 
         stream1
             .execute(&CommandRequest::new_hset("t1", "k", "v".into()))
