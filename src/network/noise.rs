@@ -41,8 +41,8 @@ where
 {
     type Output = NoiseStream<S>;
     type Error = SnowstormError;
-    fn accept(&self, input: S) -> impl Future<Output = Result<Self::Output, Self::Error>> + Send {
-        async move { NoiseServer::accept(&self, input).await }
+    async fn accept(&self, input: S) -> Result<Self::Output, Self::Error> {
+        NoiseServer::accept(self, input).await
     }
 }
 
@@ -73,8 +73,8 @@ where
 {
     type Output = NoiseStream<S>;
     type Error = SnowstormError;
-    fn connect(&self, input: S) -> impl Future<Output = Result<Self::Output, Self::Error>> + Send {
-        async move { NoiseClient::connect(self, input).await }
+    async fn connect(&self, input: S) -> Result<Self::Output, Self::Error> {
+        NoiseClient::connect(self, input).await
     }
 }
 

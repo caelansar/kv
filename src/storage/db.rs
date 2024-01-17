@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_sledb() {
-        let mut db = SledDb::new("kv_db");
+        let db = SledDb::new("kv_db");
         db.set("table", "abc".to_string(), "v".into()).unwrap();
 
         let v = db.get("table", "abc").unwrap();

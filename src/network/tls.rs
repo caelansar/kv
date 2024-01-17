@@ -84,11 +84,8 @@ where
 {
     type Output = ServerTlsStream<S>;
     type Error = KvError;
-    fn accept(
-        &self,
-        input: S,
-    ) -> impl Future<Output = anyhow::Result<Self::Output, Self::Error>> + Send {
-        async move { TlsServer::accept(&self, input).await }
+    async fn accept(&self, input: S) -> anyhow::Result<Self::Output, Self::Error> {
+        TlsServer::accept(self, input).await
     }
 }
 
@@ -158,11 +155,8 @@ where
 {
     type Output = ClientTlsStream<S>;
     type Error = KvError;
-    fn connect(
-        &self,
-        input: S,
-    ) -> impl Future<Output = anyhow::Result<Self::Output, Self::Error>> + Send {
-        async move { TlsClient::connect(self, input).await }
+    async fn connect(&self, input: S) -> anyhow::Result<Self::Output, Self::Error> {
+        TlsClient::connect(self, input).await
     }
 }
 
