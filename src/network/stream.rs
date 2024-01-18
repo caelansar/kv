@@ -42,9 +42,9 @@ where
     type Item = Result<F, KvError>;
 
     fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
+    ) -> Poll<Option<Self::Item>> {
         let mut rest = self.rbuf.split_off(0);
 
         let fut = read_frame(&mut self.inner, &mut rest);
@@ -63,21 +63,21 @@ where
     type Error = KvError;
 
     fn poll_ready(
-        self: std::pin::Pin<&mut Self>,
+        self: Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
+    ) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn start_send(mut self: std::pin::Pin<&mut Self>, item: &T) -> Result<(), Self::Error> {
+    fn start_send(mut self: Pin<&mut Self>, item: &T) -> Result<(), Self::Error> {
         item.encode_frame(&mut self.wbuf)?;
         Ok(())
     }
 
     fn poll_flush(
-        mut self: std::pin::Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
+    ) -> Poll<Result<(), Self::Error>> {
         while self.written != self.wbuf.len() {
             let rest = self.wbuf.split_off(0);
             let written = self.written;
@@ -93,9 +93,9 @@ where
     }
 
     fn poll_close(
-        mut self: std::pin::Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
+    ) -> Poll<Result<(), Self::Error>> {
         ready!(self.as_mut().poll_flush(cx)?);
 
         ready!(Pin::new(&mut self.inner).poll_shutdown(cx)?);

@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::io::{BufReader, Cursor};
 use std::sync::Arc;
 

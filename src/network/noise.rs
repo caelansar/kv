@@ -2,7 +2,6 @@ use crate::network::{Acceptor, Connector};
 use anyhow::Result;
 use snow::{params::NoiseParams, Builder};
 use snowstorm::{NoiseStream, SnowstormError};
-use std::future::Future;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub struct NoiseServer<'a> {
