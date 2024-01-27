@@ -111,7 +111,7 @@ impl TlsClient {
             .with_cipher_suites(&suites)
             .with_safe_default_kx_groups()
             .with_protocol_versions(&versions)
-            .map_err(|_| KvError::CertifcateParseError("client", "protocol_version"))?
+            .map_err(|_| KvError::CertificateParseError("client", "protocol_version"))?
             .with_root_certificates(root_store);
 
         if let Some((cert, key)) = identity {
@@ -119,7 +119,7 @@ impl TlsClient {
             let key = load_key(key)?;
             let config = builder
                 .with_single_cert(certs, key)
-                .map_err(|_| KvError::CertifcateParseError("client", "cert"))?;
+                .map_err(|_| KvError::CertificateParseError("client", "cert"))?;
             Ok(Self {
                 config: Arc::new(config),
                 domain: Arc::new(domain.into()),
@@ -163,7 +163,7 @@ fn load_certs(cert: &str) -> Result<Vec<Certificate>, KvError> {
     let cert = Cursor::new(cert);
     let mut reader = BufReader::new(cert);
     Ok(rustls_pemfile::certs(&mut reader)
-        .map_err(|_| KvError::CertifcateParseError("server", "cert"))?
+        .map_err(|_| KvError::CertificateParseError("server", "cert"))?
         .into_iter()
         .map(Certificate)
         .collect())
@@ -182,7 +182,7 @@ fn load_key(key: &str) -> Result<PrivateKey, KvError> {
         }
     }
 
-    Err(KvError::CertifcateParseError("private", "key"))
+    Err(KvError::CertificateParseError("private", "key"))
 }
 
 #[cfg(test)]

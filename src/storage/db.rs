@@ -31,7 +31,11 @@ impl Storage for SledDb {
         let name = SledDb::get_full_key(table, &key);
         let data: Vec<u8> = value.try_into()?;
 
-        let result = self.0.insert(name, data)?.map(|v| v.as_ref().try_into());
+        let result = self
+            .0
+            .insert(name, data)
+            .map_err(|e| KvError::StorageError("set", table.to_string(), key, e.to_string()))?
+            .map(|v| v.as_ref().try_into());
         result.transpose()
     }
 
