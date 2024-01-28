@@ -53,6 +53,6 @@ impl Storage for MemTable {
 
     fn get_iter(&self, table: &str) -> Result<impl Iterator<Item = Kvpair>, KvError> {
         let table = self.get_or_create_table(table);
-        Ok(StorageIter::new(table.to_owned().into_iter()))
+        Ok(StorageIter::new(DashMap::to_owned(&table).into_iter()))
     }
 }
